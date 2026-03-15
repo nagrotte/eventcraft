@@ -1,0 +1,206 @@
+/**
+ * EventCraft — Base Styles
+ * ========================
+ * CSS reset + global defaults.
+ * CSS custom properties are injected by ThemeProvider at runtime.
+ * This file provides fallback values (dark mode defaults).
+ *
+ * Import once in apps/web/app/globals.css
+ */
+
+/* ── CSS Custom Properties (dark mode defaults) ──────────────────────────────
+   ThemeProvider overrides these at runtime based on the active mode.
+   ────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Brand */
+  --ec-brand:          #7C6EFA;
+  --ec-brand-dim:      #5A4ED1;
+  --ec-brand-glow:     rgba(124, 110, 250, 0.14);
+
+  /* Surfaces */
+  --ec-bg:             #0B0B18;
+  --ec-surface:        #131324;
+  --ec-card:           #1A1A30;
+  --ec-card-hover:     #1F1F3A;
+  --ec-elevated:       #16162A;
+
+  /* Borders */
+  --ec-border:         rgba(255, 255, 255, 0.06);
+  --ec-border-mid:     rgba(255, 255, 255, 0.11);
+  --ec-border-strong:  rgba(255, 255, 255, 0.18);
+
+  /* Text */
+  --ec-text-primary:   #EDEAF8;
+  --ec-text-secondary: #7E7C9A;
+  --ec-text-hint:      #4A4865;
+
+  /* Semantic */
+  --ec-success:        #2DD4A0;
+  --ec-success-bg:     rgba(45, 212, 160, 0.12);
+  --ec-warning:        #F5A623;
+  --ec-warning-bg:     rgba(245, 166, 35, 0.12);
+  --ec-danger:         #F0595A;
+  --ec-danger-bg:      rgba(240, 89, 90, 0.12);
+
+  /* Spacing */
+  --ec-space-1:  4px;
+  --ec-space-2:  8px;
+  --ec-space-3:  12px;
+  --ec-space-4:  16px;
+  --ec-space-6:  24px;
+  --ec-space-8:  32px;
+
+  /* Radius */
+  --ec-radius-sm:   4px;
+  --ec-radius-md:   8px;
+  --ec-radius-lg:   12px;
+  --ec-radius-xl:   16px;
+  --ec-radius-2xl:  24px;
+  --ec-radius-full: 9999px;
+
+  /* Typography */
+  --ec-font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --ec-font-mono: "JetBrains Mono", "Fira Mono", "Courier New", monospace;
+}
+
+/* ── Reset ───────────────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  tab-size: 2;
+}
+
+body {
+  font-family:             var(--ec-font-sans);
+  background-color:        var(--ec-bg);
+  color:                   var(--ec-text-primary);
+  line-height:             1.6;
+  -webkit-font-smoothing:  antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Typography ──────────────────────────────────────────────────────────── */
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--ec-text-primary);
+}
+
+p {
+  color: var(--ec-text-secondary);
+  line-height: 1.7;
+}
+
+a {
+  color: var(--ec-brand);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+code, pre {
+  font-family: var(--ec-font-mono);
+  font-size: 0.875em;
+}
+
+/* ── Form Elements ───────────────────────────────────────────────────────── */
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: inherit;
+  background-color: var(--ec-card);
+  color: var(--ec-text-primary);
+  border: 1px solid var(--ec-border);
+  border-radius: var(--ec-radius-md);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--ec-brand);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--ec-text-hint);
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--ec-border-mid);
+  border-radius: var(--ec-radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ec-border-strong);
+}
+
+/* ── Selection ───────────────────────────────────────────────────────────── */
+
+::selection {
+  background: var(--ec-brand-glow);
+  color: var(--ec-text-primary);
+}
+
+/* ── Utility Classes ─────────────────────────────────────────────────────── */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transition-default {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
