@@ -1,0 +1,38 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "apps", "apps", "{1787FE1D-075E-9E68-7218-25F1BD1BBEAB}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "api", "api", "{BC2D172B-13BC-136C-CDB1-4B1A687208C4}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "EventCraft.Events", "EventCraft.Events", "{A0242E2C-61AA-C276-A9B5-A3B979D32D55}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{5B9DAEE4-E632-04CE-EFBC-33A558AA62A5}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EventCraft.Events", "apps\api\EventCraft.Events\src\EventCraft.Events\EventCraft.Events.csproj", "{8E4777CF-DF4E-F2D1-3DB3-E9CE88918F7E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8E4777CF-DF4E-F2D1-3DB3-E9CE88918F7E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8E4777CF-DF4E-F2D1-3DB3-E9CE88918F7E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8E4777CF-DF4E-F2D1-3DB3-E9CE88918F7E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8E4777CF-DF4E-F2D1-3DB3-E9CE88918F7E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{BC2D172B-13BC-136C-CDB1-4B1A687208C4} = {1787FE1D-075E-9E68-7218-25F1BD1BBEAB}
+		{A0242E2C-61AA-C276-A9B5-A3B979D32D55} = {BC2D172B-13BC-136C-CDB1-4B1A687208C4}
+		{5B9DAEE4-E632-04CE-EFBC-33A558AA62A5} = {A0242E2C-61AA-C276-A9B5-A3B979D32D55}
+		{8E4777CF-DF4E-F2D1-3DB3-E9CE88918F7E} = {5B9DAEE4-E632-04CE-EFBC-33A558AA62A5}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {AD477B9D-67C4-4F13-8266-699E7D5AE88D}
+	EndGlobalSection
+EndGlobal
