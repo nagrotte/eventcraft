@@ -1,0 +1,103 @@
+# =============================================================================
+# EventCraft — Deploy to Production
+# Triggers on push to main branch. Manual approval required.
+# .github/workflows/deploy-prod.yml
+# =============================================================================
+
+name: Deploy → Production
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy-prod:
+    name: Deploy to AWS (production)
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://eventcraft.io
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - uses: aws-actions/setup-sam@v2
+        with: { use-installer: true }
+
+      - uses: pnpm/action-setup@v4
+        with: { version: '9' }
+
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: pnpm }
+
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '8.0.x' }
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: SAM build
+        run: sam build --template-file infrastructure/template.yaml --parallel
+
+      - name: SAM deploy (prod)
+        run: |
+          sam deploy \
+            --stack-name eventcraft-prod \
+            --s3-bucket ${{ secrets.SAM_BUCKET_PROD }} \
+            --s3-prefix sam/prod \
+            --region ${{ secrets.AWS_REGION }} \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --parameter-overrides \
+              Environment=prod \
+              DynamoDBTable=${{ secrets.DYNAMODB_TABLE_PROD }} \
+              CognitoPoolId=${{ secrets.COGNITO_POOL_ID_PROD }} \
+            --no-fail-on-empty-changeset \
+            --tags App=eventcraft Env=prod
+
+      - name: Build + deploy frontend (prod)
+        env:
+          NEXT_PUBLIC_API_URL: https://api.eventcraft.io
+          NEXT_PUBLIC_COGNITO_POOL_ID: ${{ secrets.COGNITO_POOL_ID_PROD }}
+          NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ secrets.COGNITO_CLIENT_ID_PROD }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          NEXT_PUBLIC_RECAPTCHA_SITE_KEY: ${{ secrets.RECAPTCHA_SITE_KEY_PROD }}
+          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY_PROD }}
+        run: |
+          pnpm --filter web build
+          aws s3 sync apps/web/out/ s3://${{ secrets.S3_FRONTEND_BUCKET_PROD }}/ \
+            --delete \
+            --cache-control "public,max-age=31536000,immutable" \
+            --exclude "*.html"
+          aws s3 sync apps/web/out/ s3://${{ secrets.S3_FRONTEND_BUCKET_PROD }}/ \
+            --cache-control "no-cache,no-store,must-revalidate" \
+            --include "*.html"
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.CLOUDFRONT_ID_PROD }} \
+            --paths "/*"
+
+      - name: Sentry release
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+        run: |
+          npx @sentry/cli releases new "${{ github.sha }}"
+          npx @sentry/cli releases set-commits "${{ github.sha }}" --auto
+          npx @sentry/cli releases finalize "${{ github.sha }}"
+          npx @sentry/cli releases deploys "${{ github.sha }}" new -e production
+
+      - name: Post-deploy smoke test
+        run: |
+          sleep 20
+          curl -f https://api.eventcraft.io/health
+          echo "Production deployment verified"

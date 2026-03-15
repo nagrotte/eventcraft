@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+.next/
+.expo/
+out/
+
+# AWS / SAM
+.aws-sam/
+.env.*
+!.env.example
+samconfig.toml.local
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+*.swp
+*.swo
+
+# Testing
+coverage/
+
+# Sentry
+.sentryclirc
+
+# Lambda build
+apps/api/*/bin/
+apps/api/*/obj/

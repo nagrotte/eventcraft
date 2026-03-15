@@ -1,0 +1,1 @@
+{"PoolName":"eventcraft-users-staging","UsernameAttributes":["email"],"AutoVerifiedAttributes":["email"],"UsernameConfiguration":{"CaseSensitive":false},"Policies":{"PasswordPolicy":{"MinimumLength":8,"RequireUppercase":true,"RequireLowercase":true,"RequireNumbers":true,"RequireSymbols":false}}}

@@ -1,0 +1,174 @@
+# =============================================================================
+# EventCraft — GitHub Actions CI Pipeline
+# Runs on every push and PR
+# .github/workflows/ci.yml
+# =============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main, staging, develop]
+  pull_request:
+    branches: [main, staging, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+  DOTNET_VERSION: '8.0.x'
+  PNPM_VERSION: '9'
+
+jobs:
+  # ── Frontend: Next.js web ────────────────────────────────────────────────────
+  ci-frontend:
+    name: Frontend (Next.js)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with: { version: '${{ env.PNPM_VERSION }}' }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm --filter web typecheck
+
+      - name: Lint
+        run: pnpm --filter web lint
+
+      - name: Unit tests
+        run: pnpm --filter web test --coverage
+
+      - name: Build
+        run: pnpm --filter web build
+        env:
+          NEXT_PUBLIC_API_URL: https://api-staging.eventcraft.io
+          NEXT_PUBLIC_COGNITO_POOL_ID: ${{ secrets.COGNITO_POOL_ID_STAGING }}
+          NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ secrets.COGNITO_CLIENT_ID_STAGING }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          NEXT_PUBLIC_RECAPTCHA_SITE_KEY: ${{ secrets.RECAPTCHA_SITE_KEY }}
+
+      - name: Upload Sentry source maps
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+        run: pnpm --filter web sentry:sourcemaps
+
+      - name: Coverage gate (80% minimum)
+        run: |
+          COVERAGE=$(cat apps/web/coverage/coverage-summary.json | \
+            node -e "const d=require('fs').readFileSync('/dev/stdin','utf8'); \
+            const j=JSON.parse(d); console.log(j.total.lines.pct)")
+          echo "Coverage: ${COVERAGE}%"
+          node -e "if(${COVERAGE}<80){console.error('Coverage below 80%');process.exit(1)}"
+
+  # ── Mobile: Expo ─────────────────────────────────────────────────────────────
+  ci-mobile:
+    name: Mobile (Expo)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with: { version: '${{ env.PNPM_VERSION }}' }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm --filter mobile typecheck
+
+      - name: Lint
+        run: pnpm --filter mobile lint
+
+      - name: Unit tests
+        run: pnpm --filter mobile test
+
+  # ── Backend: .NET 8 Lambdas ──────────────────────────────────────────────────
+  ci-backend:
+    name: Backend (.NET 8)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        working-directory: apps/api
+        run: dotnet restore
+
+      - name: Build
+        working-directory: apps/api
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test
+        working-directory: apps/api
+        run: |
+          dotnet test --no-build --configuration Release \
+            --collect:"XPlat Code Coverage" \
+            --logger "trx;LogFileName=results.trx" \
+            /p:CollectCoverage=true \
+            /p:CoverletOutputFormat=cobertura \
+            /p:Threshold=80 \
+            /p:ThresholdType=line
+
+      - name: SAM validate
+        uses: aws-actions/setup-sam@v2
+        with: { use-installer: true }
+      - run: sam validate --template infrastructure/template.yaml --lint
+
+      - name: Publish artifacts
+        working-directory: apps/api
+        run: dotnet publish --no-build --configuration Release --output ./publish
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: api-publish
+          path: apps/api/publish/
+          retention-days: 7
+
+  # ── Shared packages ───────────────────────────────────────────────────────────
+  ci-packages:
+    name: Shared packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with: { version: '${{ env.PNPM_VERSION }}' }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check all packages
+        run: pnpm --filter "./packages/*" typecheck
+
+      - name: Lint all packages
+        run: pnpm --filter "./packages/*" lint
+
+      - name: Test all packages
+        run: pnpm --filter "./packages/*" test

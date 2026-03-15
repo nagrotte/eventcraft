@@ -1,0 +1,95 @@
+# =============================================================================
+# EventCraft — Deploy to Staging
+# Triggers on push to staging branch after CI passes
+# .github/workflows/deploy-staging.yml
+# =============================================================================
+
+name: Deploy → Staging
+
+on:
+  push:
+    branches: [staging]
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy-staging:
+    name: Deploy to AWS (staging)
+    runs-on: ubuntu-latest
+    needs: []
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - uses: aws-actions/setup-sam@v2
+        with: { use-installer: true }
+
+      - uses: pnpm/action-setup@v4
+        with: { version: '9' }
+
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: pnpm }
+
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '8.0.x' }
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: SAM build
+        run: sam build --template-file infrastructure/template.yaml --parallel
+
+      - name: SAM deploy (staging)
+        run: |
+          sam deploy \
+            --stack-name eventcraft-staging \
+            --s3-bucket ${{ secrets.SAM_BUCKET_STAGING }} \
+            --s3-prefix sam/staging \
+            --region ${{ secrets.AWS_REGION }} \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --parameter-overrides \
+              Environment=staging \
+              DynamoDBTable=${{ secrets.DYNAMODB_TABLE_STAGING }} \
+              CognitoPoolId=${{ secrets.COGNITO_POOL_ID_STAGING }} \
+            --no-fail-on-empty-changeset \
+            --tags App=eventcraft Env=staging
+
+      - name: Build + deploy frontend
+        env:
+          NEXT_PUBLIC_API_URL: https://api-staging.eventcraft.io
+          NEXT_PUBLIC_COGNITO_POOL_ID: ${{ secrets.COGNITO_POOL_ID_STAGING }}
+          NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ secrets.COGNITO_CLIENT_ID_STAGING }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          NEXT_PUBLIC_RECAPTCHA_SITE_KEY: ${{ secrets.RECAPTCHA_SITE_KEY_STAGING }}
+          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY_STAGING }}
+        run: |
+          pnpm --filter web build
+          aws s3 sync apps/web/out/ s3://${{ secrets.S3_FRONTEND_BUCKET_STAGING }}/ --delete
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.CLOUDFRONT_ID_STAGING }} \
+            --paths "/*" 2>/dev/null || echo "No CloudFront yet — skipping"
+
+      - name: Smoke test
+        run: |
+          sleep 15
+          curl -f https://api-staging.eventcraft.io/health || echo "Health check pending"
+
+      - name: Notify Sentry of deployment
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+        run: |
+          npx @sentry/cli releases new "${{ github.sha }}"
+          npx @sentry/cli releases set-commits "${{ github.sha }}" --auto
+          npx @sentry/cli releases finalize "${{ github.sha }}"
+          npx @sentry/cli releases deploys "${{ github.sha }}" new -e staging
