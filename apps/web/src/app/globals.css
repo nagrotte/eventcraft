@@ -1,0 +1,371 @@
+@import "tailwindcss";
+
+/* =============================================================================
+   EventCraft Design System
+   Single source of truth for all visual decisions.
+   Pages and components never use raw color values — only these variables.
+   ============================================================================= */
+
+/* ── Dark mode (default) ──────────────────────────────────────────────────── */
+:root {
+  /* Brand — refined indigo, not neon */
+  --ec-brand:          #6366F1;
+  --ec-brand-dim:      #4F46E5;
+  --ec-brand-subtle:   rgba(99, 102, 241, 0.08);
+  --ec-brand-border:   rgba(99, 102, 241, 0.20);
+
+  /* Backgrounds */
+  --ec-bg:             #0C0C0F;
+  --ec-surface:        #141417;
+  --ec-surface-raised: #1C1C21;
+  --ec-overlay:        #212128;
+
+  /* Borders */
+  --ec-border:         rgba(255, 255, 255, 0.07);
+  --ec-border-mid:     rgba(255, 255, 255, 0.11);
+  --ec-border-strong:  rgba(255, 255, 255, 0.18);
+
+  /* Text */
+  --ec-text-1:         #F4F4F5;
+  --ec-text-2:         #A1A1AA;
+  --ec-text-3:         #52525B;
+  --ec-text-inverse:   #0C0C0F;
+
+  /* Semantic */
+  --ec-success:        #34D399;
+  --ec-success-bg:     rgba(52, 211, 153, 0.08);
+  --ec-success-border: rgba(52, 211, 153, 0.15);
+  --ec-warning:        #FBBF24;
+  --ec-warning-bg:     rgba(251, 191, 36, 0.08);
+  --ec-danger:         #F87171;
+  --ec-danger-bg:      rgba(248, 113, 113, 0.08);
+  --ec-danger-border:  rgba(248, 113, 113, 0.15);
+
+  /* Shadows */
+  --ec-shadow-sm:      0 1px 3px rgba(0,0,0,0.4);
+  --ec-shadow-md:      0 4px 16px rgba(0,0,0,0.5);
+  --ec-shadow-lg:      0 8px 32px rgba(0,0,0,0.6);
+  --ec-shadow-brand:   0 0 0 3px rgba(99,102,241,0.15);
+
+  /* Radius */
+  --ec-radius-sm:      6px;
+  --ec-radius-md:      8px;
+  --ec-radius-lg:      12px;
+  --ec-radius-xl:      16px;
+
+  /* Typography */
+  --ec-font:           "Inter", system-ui, -apple-system, sans-serif;
+  --ec-font-mono:      "JetBrains Mono", "Fira Mono", monospace;
+}
+
+/* ── Light mode ───────────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --ec-brand:          #4F46E5;
+  --ec-brand-dim:      #4338CA;
+  --ec-brand-subtle:   rgba(79, 70, 229, 0.06);
+  --ec-brand-border:   rgba(79, 70, 229, 0.18);
+
+  --ec-bg:             #FAFAFA;
+  --ec-surface:        #FFFFFF;
+  --ec-surface-raised: #F4F4F5;
+  --ec-overlay:        #E4E4E7;
+
+  --ec-border:         rgba(0, 0, 0, 0.07);
+  --ec-border-mid:     rgba(0, 0, 0, 0.11);
+  --ec-border-strong:  rgba(0, 0, 0, 0.18);
+
+  --ec-text-1:         #09090B;
+  --ec-text-2:         #52525B;
+  --ec-text-3:         #A1A1AA;
+  --ec-text-inverse:   #F4F4F5;
+
+  --ec-success:        #059669;
+  --ec-success-bg:     rgba(5, 150, 105, 0.06);
+  --ec-success-border: rgba(5, 150, 105, 0.15);
+  --ec-warning:        #D97706;
+  --ec-warning-bg:     rgba(217, 119, 6, 0.06);
+  --ec-danger:         #DC2626;
+  --ec-danger-bg:      rgba(220, 38, 38, 0.06);
+  --ec-danger-border:  rgba(220, 38, 38, 0.15);
+
+  --ec-shadow-sm:      0 1px 3px rgba(0,0,0,0.08);
+  --ec-shadow-md:      0 4px 16px rgba(0,0,0,0.10);
+  --ec-shadow-lg:      0 8px 32px rgba(0,0,0,0.12);
+  --ec-shadow-brand:   0 0 0 3px rgba(79,70,229,0.12);
+}
+
+/* ── Base reset ───────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  font-family:             var(--ec-font);
+  background-color:        var(--ec-bg);
+  color:                   var(--ec-text-1);
+  -webkit-font-smoothing:  antialiased;
+  text-rendering:          optimizeLegibility;
+}
+
+body { min-height: 100vh; }
+
+/* ── Component classes ─────────────────────────────────────────────────────── */
+
+/* Button */
+.ec-btn {
+  display:         inline-flex;
+  align-items:     center;
+  justify-content: center;
+  gap:             6px;
+  height:          36px;
+  padding:         0 14px;
+  border-radius:   var(--ec-radius-md);
+  font-size:       13px;
+  font-weight:     500;
+  letter-spacing:  -0.01em;
+  border:          1px solid transparent;
+  cursor:          pointer;
+  transition:      all 0.15s ease;
+  white-space:     nowrap;
+  outline:         none;
+  position:        relative;
+  overflow:        hidden;
+}
+
+.ec-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.ec-btn-primary {
+  background: linear-gradient(135deg, var(--ec-brand) 0%, var(--ec-brand-dim) 100%);
+  color:      var(--ec-text-inverse);
+  box-shadow: var(--ec-shadow-sm);
+}
+.ec-btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
+.ec-btn-primary:active:not(:disabled) { filter: brightness(0.96); transform: scale(0.99); }
+
+.ec-btn-secondary {
+  background:    var(--ec-surface-raised);
+  color:         var(--ec-text-1);
+  border-color:  var(--ec-border-mid);
+}
+.ec-btn-secondary:hover:not(:disabled) {
+  background:   var(--ec-overlay);
+  border-color: var(--ec-border-strong);
+}
+
+.ec-btn-ghost {
+  background:  transparent;
+  color:       var(--ec-text-2);
+  border-color: transparent;
+}
+.ec-btn-ghost:hover:not(:disabled) {
+  background: var(--ec-surface-raised);
+  color:      var(--ec-text-1);
+}
+
+.ec-btn-danger {
+  background:   var(--ec-danger-bg);
+  color:        var(--ec-danger);
+  border-color: var(--ec-danger-border);
+}
+.ec-btn-danger:hover:not(:disabled) {
+  background: var(--ec-danger);
+  color:      white;
+}
+
+.ec-btn-sm { height: 30px; padding: 0 10px; font-size: 12px; }
+.ec-btn-lg { height: 42px; padding: 0 20px; font-size: 14px; }
+
+/* Input */
+.ec-input {
+  width:         100%;
+  height:        36px;
+  padding:       0 12px;
+  border-radius: var(--ec-radius-md);
+  background:    var(--ec-surface-raised);
+  border:        1px solid var(--ec-border);
+  color:         var(--ec-text-1);
+  font-size:     13px;
+  font-family:   var(--ec-font);
+  outline:       none;
+  transition:    all 0.15s ease;
+}
+.ec-input::placeholder { color: var(--ec-text-3); }
+.ec-input:focus {
+  border-color: var(--ec-brand);
+  background:   var(--ec-surface);
+  box-shadow:   var(--ec-shadow-brand);
+}
+.ec-input-error {
+  border-color: var(--ec-danger);
+}
+.ec-input-error:focus {
+  box-shadow: 0 0 0 3px rgba(248,113,113,0.12);
+}
+
+/* Label */
+.ec-label {
+  display:       block;
+  font-size:     11px;
+  font-weight:   500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color:          var(--ec-text-2);
+  margin-bottom:  6px;
+}
+
+/* Card */
+.ec-card {
+  background:    var(--ec-surface);
+  border:        1px solid var(--ec-border);
+  border-radius: var(--ec-radius-xl);
+  box-shadow:    var(--ec-shadow-md);
+}
+
+.ec-card-raised {
+  background:    var(--ec-surface-raised);
+  border:        1px solid var(--ec-border-mid);
+  border-radius: var(--ec-radius-lg);
+}
+
+/* Auth layout */
+.ec-auth-bg {
+  min-height:       100vh;
+  display:          flex;
+  align-items:      center;
+  justify-content:  center;
+  background-color: var(--ec-bg);
+  padding:          24px;
+  position:         relative;
+  overflow:         hidden;
+}
+
+.ec-auth-bg::before {
+  content:          '';
+  position:         absolute;
+  top:              -30%;
+  left:             50%;
+  transform:        translateX(-50%);
+  width:            700px;
+  height:           500px;
+  background:       radial-gradient(ellipse, rgba(99,102,241,0.10) 0%, transparent 70%);
+  pointer-events:   none;
+}
+
+.ec-auth-card {
+  width:          100%;
+  max-width:      400px;
+  position:       relative;
+  z-index:        1;
+}
+
+/* Logo mark */
+.ec-logo-mark {
+  width:         32px;
+  height:        32px;
+  border-radius: var(--ec-radius-md);
+  background:    linear-gradient(135deg, var(--ec-brand) 0%, var(--ec-brand-dim) 100%);
+  display:       flex;
+  align-items:   center;
+  justify-content: center;
+  box-shadow:    0 2px 8px rgba(99,102,241,0.30);
+}
+
+/* Nav */
+.ec-nav {
+  height:        52px;
+  border-bottom: 1px solid var(--ec-border);
+  display:       flex;
+  align-items:   center;
+  padding:       0 24px;
+  justify-content: space-between;
+  background:    var(--ec-surface);
+  position:      sticky;
+  top:           0;
+  z-index:       100;
+}
+
+/* Page shell */
+.ec-page {
+  max-width:  760px;
+  margin:     0 auto;
+  padding:    40px 24px;
+}
+
+/* Badge */
+.ec-badge {
+  display:       inline-flex;
+  align-items:   center;
+  height:        20px;
+  padding:       0 8px;
+  border-radius: 9999px;
+  font-size:     11px;
+  font-weight:   500;
+  border:        1px solid transparent;
+}
+.ec-badge-draft {
+  background:   var(--ec-surface-raised);
+  color:        var(--ec-text-2);
+  border-color: var(--ec-border);
+}
+.ec-badge-published {
+  background:   var(--ec-success-bg);
+  color:        var(--ec-success);
+  border-color: var(--ec-success-border);
+}
+
+/* Divider */
+.ec-divider {
+  height:     1px;
+  background: var(--ec-border);
+  margin:     24px 0;
+}
+
+/* Error message */
+.ec-error {
+  display:       flex;
+  align-items:   center;
+  gap:           8px;
+  padding:       10px 12px;
+  border-radius: var(--ec-radius-md);
+  background:    var(--ec-danger-bg);
+  border:        1px solid var(--ec-danger-border);
+  font-size:     12px;
+  color:         var(--ec-danger);
+}
+
+/* Spinner */
+.ec-spinner {
+  width:        18px;
+  height:       18px;
+  border:       2px solid var(--ec-border-mid);
+  border-top:   2px solid var(--ec-brand);
+  border-radius: 50%;
+  animation:    ec-spin 0.7s linear infinite;
+}
+@keyframes ec-spin { to { transform: rotate(360deg); } }
+
+/* Empty state */
+.ec-empty {
+  display:         flex;
+  flex-direction:  column;
+  align-items:     center;
+  justify-content: center;
+  padding:         64px 24px;
+  text-align:      center;
+  border:          1px dashed var(--ec-border-mid);
+  border-radius:   var(--ec-radius-xl);
+}
+
+/* Row item */
+.ec-row {
+  display:        flex;
+  align-items:    center;
+  justify-content: space-between;
+  padding:        14px 16px;
+  border-radius:  var(--ec-radius-lg);
+  border:         1px solid var(--ec-border);
+  background:     var(--ec-surface);
+  transition:     all 0.12s ease;
+}
+.ec-row:hover {
+  border-color: var(--ec-border-mid);
+  background:   var(--ec-surface-raised);
+}

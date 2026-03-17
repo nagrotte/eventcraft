@@ -48,12 +48,17 @@ public class EventsHandler
         _mediator = _services.GetRequiredService<IMediator>();
     }
 
-    public async Task<APIGatewayProxyResponse> FunctionHandler(APIGatewayProxyRequest request, ILambdaContext context)
+    public async Task<APIGatewayProxyResponse> FunctionHandler(
+        APIGatewayProxyRequest request, ILambdaContext context)
     {
         var method = request.HttpMethod?.ToUpper() ?? "GET";
         var path = request.Path ?? "";
 
         context.Logger.LogInformation($"Request: {method} {path}");
+
+        // Handle CORS preflight
+        if (method == "OPTIONS")
+            return new APIGatewayProxyResponse { StatusCode = 200, Headers = CorsHeaders() };
 
         try
         {
@@ -178,7 +183,7 @@ public class EventsHandler
         return new APIGatewayProxyResponse { StatusCode = 204, Headers = CorsHeaders() };
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // ── Response helpers ──────────────────────────────────────────────────────
 
     private static APIGatewayProxyResponse OkResponse(object data, int statusCode = 200)
         => new()
@@ -207,6 +212,8 @@ public class EventsHandler
             ["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS",
             ["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
         };
+
+    // ── Utilities ─────────────────────────────────────────────────────────────
 
     private static string? GetUserId(APIGatewayProxyRequest req)
     {
