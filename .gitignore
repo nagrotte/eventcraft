@@ -36,3 +36,6 @@ coverage/
 # Lambda build
 apps/api/*/bin/
 apps/api/*/obj/
+
+keyssecrets.txt
+*.secrets.txt
