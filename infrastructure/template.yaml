@@ -39,7 +39,7 @@ Parameters:
 # ── Globals ───────────────────────────────────────────────────────────────────
 Globals:
   Function:
-    Runtime: dotnet8
+    Runtime: provided.al2023
     Architectures: [arm64]          # Graviton2 — 20% cheaper than x86
     MemorySize: 512
     Timeout: 29                     # API GW max is 30s
@@ -155,23 +155,87 @@ Resources:
   # ── Lambda: Events ───────────────────────────────────────────────────────────
   EventsFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: dotnet9
     Properties:
       FunctionName: !Sub eventcraft-events-${Environment}
       Description: Event CRUD, RSVP, microsite management
-      CodeUri: apps/api/EventCraft.Lambda.Events/
-      Handler: EventCraft.Lambda.Events::EventCraft.Lambda.Events.Function::FunctionHandler
+      CodeUri: ../apps/api/EventCraft.Events/src/EventCraft.Events/
+      Handler: bootstrap
       Role: !GetAtt LambdaExecutionRole.Arn
       Events:
-        CreateEvent:   { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: POST,   Path: /events } }
-        GetEvent:      { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: GET,    Path: /events/{eventId} } }
-        UpdateEvent:   { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: PUT,    Path: /events/{eventId} } }
-        DeleteEvent:   { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: DELETE, Path: /events/{eventId} } }
-        ListEvents:    { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: GET,    Path: /events } }
-        PublishEvent:  { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: POST,   Path: /events/{eventId}/publish } }
-        SubmitRsvp:    { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: POST,   Path: /events/{eventId}/rsvp, Auth: { Authorizer: NONE } } }
-        GetRsvps:      { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: GET,    Path: /events/{eventId}/rsvp } }
-        GetMicrosite:  { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: GET,    Path: /e/{slug}, Auth: { Authorizer: NONE } } }
-        HealthCheck:   { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: GET,    Path: /health, Auth: { Authorizer: NONE } } }
+        CreateEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: POST
+            Path: /events
+        GetEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: GET
+            Path: /events/{eventId}
+        UpdateEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: PUT
+            Path: /events/{eventId}
+        DeleteEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: DELETE
+            Path: /events/{eventId}
+        ListEvents:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: GET
+            Path: /events
+        PublishEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: POST
+            Path: /events/{eventId}/publish
+        SubmitRsvp:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: POST
+            Path: /events/{eventId}/rsvp
+            Auth:
+              Authorizer: NONE
+        GetRsvps:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: GET
+            Path: /events/{eventId}/rsvp
+        GetRsvpSummary:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: GET
+            Path: /events/{eventId}/rsvp/summary
+        GetMicrosite:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: GET
+            Path: /e/{slug}
+            Auth:
+              Authorizer: NONE
+        HealthCheck:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: GET
+            Path: /health
+            Auth:
+              Authorizer: NONE
 
   # ── Lambda: Design ───────────────────────────────────────────────────────────
   DesignFunction:
@@ -185,12 +249,46 @@ Resources:
       Timeout: 60                   # AI generation can take longer
       Role: !GetAtt LambdaExecutionRole.Arn
       Events:
-        SaveDesign:      { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: PUT,  Path: /designs/{designId} } }
-        GetDesign:       { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: GET,  Path: /designs/{designId} } }
-        ListDesigns:     { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: GET,  Path: /designs } }
-        AiGenerate:      { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: POST, Path: /designs/ai-generate } }
-        ListTemplates:   { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: GET,  Path: /templates, Auth: { Authorizer: NONE } } }
-        GetTemplate:     { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: GET,  Path: /templates/{templateId}, Auth: { Authorizer: NONE } } }
+        SaveDesign:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: PUT
+            Path: /designs/{designId}
+        GetDesign:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: GET
+            Path: /designs/{designId}
+        ListDesigns:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: GET
+            Path: /designs
+        AiGenerate:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: POST
+            Path: /designs/ai-generate
+        ListTemplates:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: GET
+            Path: /templates
+            Auth:
+              Authorizer: NONE
+        GetTemplate:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: GET
+            Path: /templates/{templateId}
+            Auth:
+              Authorizer: NONE
 
   # ── Lambda: Export ───────────────────────────────────────────────────────────
   ExportFunction:
@@ -204,8 +302,18 @@ Resources:
       Timeout: 300                  # PDF render can take time
       Role: !GetAtt LambdaExecutionRole.Arn
       Events:
-        RequestExport: { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: POST, Path: /exports } }
-        GetExport:     { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: GET,  Path: /exports/{exportId} } }
+        RequestExport:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: POST
+            Path: /exports
+        GetExport:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: GET
+            Path: /exports/{exportId}
         SqsTrigger:
           Type: SQS
           Properties:
@@ -223,9 +331,24 @@ Resources:
       Handler: EventCraft.Lambda.Notify::EventCraft.Lambda.Notify.Function::FunctionHandler
       Role: !GetAtt LambdaExecutionRole.Arn
       Events:
-        SendInvite:    { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: POST, Path: /notify/invite } }
-        SendReminder:  { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: POST, Path: /notify/reminder } }
-        NudgePending:  { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: POST, Path: /events/{eventId}/nudge } }
+        SendInvite:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: POST
+            Path: /notify/invite
+        SendReminder:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: POST
+            Path: /notify/reminder
+        NudgePending:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: POST
+            Path: /events/{eventId}/nudge
 
   # ── Lambda: QR ───────────────────────────────────────────────────────────────
   QrFunction:
@@ -237,10 +360,32 @@ Resources:
       Handler: EventCraft.Lambda.QR::EventCraft.Lambda.QR.Function::FunctionHandler
       Role: !GetAtt LambdaExecutionRole.Arn
       Events:
-        GenerateQr:  { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: POST,   Path: /qr } }
-        GetQr:       { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: GET,    Path: /qr/{qrId} } }
-        ScanRedirect: { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: GET,   Path: /q/{qrId}, Auth: { Authorizer: NONE } } }
-        QrAnalytics: { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: GET,    Path: /qr/{qrId}/analytics } }
+        GenerateQr:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: POST
+            Path: /qr
+        GetQr:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: GET
+            Path: /qr/{qrId}
+        ScanRedirect:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: GET
+            Path: /q/{qrId}
+            Auth:
+              Authorizer: NONE
+        QrAnalytics:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: GET
+            Path: /qr/{qrId}/analytics
 
   # ── Lambda: Billing (Stripe usage metering) ───────────────────────────────────
   BillingFunction:
@@ -252,10 +397,32 @@ Resources:
       Handler: EventCraft.Lambda.Billing::EventCraft.Lambda.Billing.Function::FunctionHandler
       Role: !GetAtt LambdaExecutionRole.Arn
       Events:
-        StripeWebhook:    { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: POST, Path: /billing/webhook, Auth: { Authorizer: NONE } } }
-        GetSubscription:  { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: GET,  Path: /billing/subscription } }
-        CreateCheckout:   { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: POST, Path: /billing/checkout } }
-        GetUsage:         { Type: HttpApi, Properties: { ApiId: !Ref EventCraftApi, Method: GET,  Path: /billing/usage } }
+        StripeWebhook:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: POST
+            Path: /billing/webhook
+            Auth:
+              Authorizer: NONE
+        GetSubscription:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: GET
+            Path: /billing/subscription
+        CreateCheckout:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: POST
+            Path: /billing/checkout
+        GetUsage:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventCraftApi
+            Method: GET
+            Path: /billing/usage
         MonthlyMeter:
           Type: Schedule
           Properties:
