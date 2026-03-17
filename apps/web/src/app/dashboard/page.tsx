@@ -48,63 +48,35 @@ export default function DashboardPage() {
 
       <main className="ec-page">
 
-        {/* Header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>
           <div>
-            <h1 style={{ fontSize: 22, fontWeight: 600, color: 'var(--ec-text-1)', letterSpacing: '-0.02em' }}>
-              Events
-            </h1>
+            <h1 style={{ fontSize: 22, fontWeight: 600, color: 'var(--ec-text-1)', letterSpacing: '-0.02em' }}>Events</h1>
             <p style={{ fontSize: 13, color: 'var(--ec-text-3)', marginTop: 4 }}>
               {events?.length ?? 0} event{events?.length !== 1 ? 's' : ''}
             </p>
           </div>
-          <EcButton onClick={() => setShowForm(!showForm)}>
-            New event
-          </EcButton>
+          <EcButton onClick={() => setShowForm(!showForm)}>New event</EcButton>
         </div>
 
-        {/* Create form */}
         {showForm && (
           <div className="ec-card-raised" style={{ padding: 20, marginBottom: 20 }}>
             <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--ec-text-2)', marginBottom: 14, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               New event
             </p>
             <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <EcInput
-                placeholder="Event title"
-                value={title}
-                onChange={e => setTitle(e.target.value)}
-                required
-              />
+              <EcInput placeholder="Event title" value={title} onChange={e => setTitle(e.target.value)} required />
               <div style={{ display: 'flex', gap: 10 }}>
-                <input
-                  type="datetime-local"
-                  value={date}
-                  onChange={e => setDate(e.target.value)}
-                  required
-                  className="ec-input"
-                  style={{ flex: 1 }}
-                />
-                <EcInput
-                  placeholder="Location (optional)"
-                  value={location}
-                  onChange={e => setLocation(e.target.value)}
-                  style={{ flex: 1 }}
-                />
+                <input type="datetime-local" value={date} onChange={e => setDate(e.target.value)} required className="ec-input" style={{ flex: 1 }} />
+                <EcInput placeholder="Location (optional)" value={location} onChange={e => setLocation(e.target.value)} style={{ flex: 1 }} />
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <EcButton type="submit" loading={createEvent.isPending}>
-                  Create event
-                </EcButton>
-                <EcButton type="button" variant="ghost" onClick={() => setShowForm(false)}>
-                  Cancel
-                </EcButton>
+                <EcButton type="submit" loading={createEvent.isPending}>Create event</EcButton>
+                <EcButton type="button" variant="ghost" onClick={() => setShowForm(false)}>Cancel</EcButton>
               </div>
             </form>
           </div>
         )}
 
-        {/* Events list */}
         {isLoading ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: 64 }}>
             <div className="ec-spinner" />
@@ -128,16 +100,22 @@ export default function DashboardPage() {
                   </p>
                   <p style={{ fontSize: 12, color: 'var(--ec-text-3)', marginTop: 2 }}>
                     {new Date(event.eventDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-                    {event.location && <span style={{ color: 'var(--ec-text-3)' }}> · {event.location}</span>}
+                    {event.location && <span> · {event.location}</span>}
                   </p>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, marginLeft: 16 }}>
                   <EcBadge status={event.status} />
                   <EcButton
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => router.push(`/events/${event.eventId}/design`)}
+                  >
+                    Design
+                  </EcButton>
+                  <EcButton
                     variant="ghost"
                     size="sm"
                     onClick={() => deleteEvent.mutate(event.eventId)}
-                    title="Delete event"
                     style={{ padding: '0 6px', color: 'var(--ec-text-3)' }}
                   >
                     <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
@@ -149,7 +127,6 @@ export default function DashboardPage() {
             ))}
           </div>
         )}
-
       </main>
     </div>
   );
