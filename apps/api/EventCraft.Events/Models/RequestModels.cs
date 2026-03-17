@@ -32,3 +32,8 @@ public class PublishEventRequest
 {
   public string MicrositeSlug { get; set; } = default!;
 }
+
+public class SaveDesignRequest
+{
+  public string CanvasJson { get; set; } = default!;
+}

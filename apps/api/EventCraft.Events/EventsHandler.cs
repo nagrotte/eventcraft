@@ -18,20 +18,20 @@ namespace EventCraft.Events;
 public class EventsHandler
 {
     private static readonly IServiceProvider _services;
-    private static readonly IMediator _mediator;
+    private static readonly IMediator        _mediator;
 
     private static readonly JsonSerializerOptions _json = new()
     {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        PropertyNamingPolicy        = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition      = JsonIgnoreCondition.WhenWritingNull,
         PropertyNameCaseInsensitive = true
     };
 
     static EventsHandler()
     {
-        var env = Environment.GetEnvironmentVariable("ENVIRONMENT") ?? "staging";
+        var env       = Environment.GetEnvironmentVariable("ENVIRONMENT")    ?? "staging";
         var tableName = Environment.GetEnvironmentVariable("DYNAMODB_TABLE") ?? $"eventcraft-{env}";
-        var awsRegion = Environment.GetEnvironmentVariable("AWS_REGION") ?? "us-east-1";
+        var awsRegion = Environment.GetEnvironmentVariable("AWS_REGION")     ?? "us-east-1";
 
         var sc = new ServiceCollection();
         sc.AddLogging(b => b.AddConsole());
@@ -52,32 +52,38 @@ public class EventsHandler
         APIGatewayProxyRequest request, ILambdaContext context)
     {
         var method = request.HttpMethod?.ToUpper() ?? "GET";
-        var path = request.Path ?? "";
+        var path   = request.Path ?? "";
 
         context.Logger.LogInformation($"Request: {method} {path}");
 
-        // Handle CORS preflight
         if (method == "OPTIONS")
             return new APIGatewayProxyResponse { StatusCode = 200, Headers = CorsHeaders() };
 
         try
         {
-            if (method == "GET" && path == "/health")
+            if (method == "GET"    && path == "/health")
                 return Health();
 
-            if (method == "GET" && path == "/events")
+            if (method == "GET"    && path == "/events")
                 return await ListEvents(request);
 
-            if (method == "POST" && path == "/events")
+            if (method == "POST"   && path == "/events")
                 return await CreateEvent(request);
 
-            if (method == "GET" && path.StartsWith("/events/"))
+            // Design routes — must come before generic /events/{id} GET
+            if (method == "GET"    && path.StartsWith("/events/") && path.EndsWith("/design"))
+                return await GetDesign(request);
+
+            if (method == "POST"   && path.StartsWith("/events/") && path.EndsWith("/design"))
+                return await SaveDesign(request);
+
+            if (method == "GET"    && path.StartsWith("/events/"))
                 return await GetEvent(request);
 
-            if (method == "PUT" && path.StartsWith("/events/") && path.EndsWith("/publish"))
+            if (method == "PUT"    && path.StartsWith("/events/") && path.EndsWith("/publish"))
                 return await PublishEvent(request);
 
-            if (method == "PUT" && path.StartsWith("/events/"))
+            if (method == "PUT"    && path.StartsWith("/events/"))
                 return await UpdateEvent(request);
 
             if (method == "DELETE" && path.StartsWith("/events/"))
@@ -95,26 +101,23 @@ public class EventsHandler
     // ── Handlers ──────────────────────────────────────────────────────────────
 
     private static APIGatewayProxyResponse Health()
-        => OkResponse(new
-        {
-            status = "ok",
-            service = "eventcraft-events",
+        => OkResponse(new {
+            status      = "ok",
+            service     = "eventcraft-events",
             environment = Environment.GetEnvironmentVariable("ENVIRONMENT") ?? "staging",
-            timestamp = DateTime.UtcNow.ToString("O")
+            timestamp   = DateTime.UtcNow.ToString("O")
         });
 
     private async Task<APIGatewayProxyResponse> CreateEvent(APIGatewayProxyRequest req)
     {
         var userId = GetUserId(req);
         if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
-
         var body = Deserialize<CreateEventRequest>(req.Body);
         if (body is null) return ErrorResponse(400, "BAD_REQUEST", "Invalid request body");
         if (string.IsNullOrWhiteSpace(body.Title))
             return ErrorResponse(400, "VALIDATION_ERROR", "Title is required");
         if (string.IsNullOrWhiteSpace(body.EventDate))
             return ErrorResponse(400, "VALIDATION_ERROR", "Event date is required");
-
         var result = await _mediator.Send(new CreateEventCommand(userId, body));
         return OkResponse(ApiResponse<EventEntity>.Ok(result), 201);
     }
@@ -122,8 +125,8 @@ public class EventsHandler
     private async Task<APIGatewayProxyResponse> GetEvent(APIGatewayProxyRequest req)
     {
         var eventId = GetSegment(req.Path, 1);
-        var userId = GetUserId(req);
-        var result = await _mediator.Send(new GetEventQuery(eventId, userId));
+        var userId  = GetUserId(req);
+        var result  = await _mediator.Send(new GetEventQuery(eventId, userId));
         if (result is null) return NotFoundResponse();
         return OkResponse(ApiResponse<EventEntity>.Ok(result));
     }
@@ -132,55 +135,75 @@ public class EventsHandler
     {
         var userId = GetUserId(req);
         if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
-
         string? limitStr = null;
-        string? cursor = null;
-        req.QueryStringParameters?.TryGetValue("limit", out limitStr);
+        string? cursor   = null;
+        req.QueryStringParameters?.TryGetValue("limit",  out limitStr);
         req.QueryStringParameters?.TryGetValue("cursor", out cursor);
         int.TryParse(limitStr ?? "20", out var limit);
         if (limit <= 0) limit = 20;
-
         var result = await _mediator.Send(new ListEventsQuery(userId, limit, cursor));
         return OkResponse(ApiResponse<PaginatedResponse<EventEntity>>.Ok(result));
     }
 
     private async Task<APIGatewayProxyResponse> UpdateEvent(APIGatewayProxyRequest req)
     {
-        var userId = GetUserId(req);
+        var userId  = GetUserId(req);
         if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
-
         var eventId = GetSegment(req.Path, 1);
-        var body = Deserialize<UpdateEventRequest>(req.Body);
+        var body    = Deserialize<UpdateEventRequest>(req.Body);
         if (body is null) return ErrorResponse(400, "BAD_REQUEST", "Invalid request body");
-
-        var result = await _mediator.Send(new UpdateEventCommand(eventId, userId, body));
+        var result  = await _mediator.Send(new UpdateEventCommand(eventId, userId, body));
         if (result is null) return NotFoundResponse();
         return OkResponse(ApiResponse<EventEntity>.Ok(result));
     }
 
     private async Task<APIGatewayProxyResponse> PublishEvent(APIGatewayProxyRequest req)
     {
-        var userId = GetUserId(req);
+        var userId  = GetUserId(req);
         if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
-
         var eventId = GetSegment(req.Path, 1);
-        var body = Deserialize<PublishEventRequest>(req.Body);
+        var body    = Deserialize<PublishEventRequest>(req.Body);
         if (body is null) return ErrorResponse(400, "BAD_REQUEST", "Invalid request body");
-
-        var result = await _mediator.Send(new PublishEventCommand(eventId, userId, body.MicrositeSlug));
+        var result  = await _mediator.Send(new PublishEventCommand(eventId, userId, body.MicrositeSlug));
         if (result is null) return NotFoundResponse();
         return OkResponse(ApiResponse<EventEntity>.Ok(result));
     }
 
     private async Task<APIGatewayProxyResponse> DeleteEvent(APIGatewayProxyRequest req)
     {
-        var userId = GetUserId(req);
+        var userId  = GetUserId(req);
         if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
-
         var eventId = GetSegment(req.Path, 1);
         var deleted = await _mediator.Send(new DeleteEventCommand(eventId, userId));
         if (!deleted) return NotFoundResponse();
         return new APIGatewayProxyResponse { StatusCode = 204, Headers = CorsHeaders() };
+    }
+
+    private async Task<APIGatewayProxyResponse> GetDesign(APIGatewayProxyRequest req)
+    {
+        var userId  = GetUserId(req);
+        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+        var eventId = GetSegment(req.Path, 1);
+        var entity  = await _mediator.Send(new GetEventQuery(eventId, userId));
+        if (entity is null) return NotFoundResponse();
+        return OkResponse(ApiResponse<object>.Ok(new { canvasJson = entity.DesignJson }));
+    }
+
+    private async Task<APIGatewayProxyResponse> SaveDesign(APIGatewayProxyRequest req)
+    {
+        var userId  = GetUserId(req);
+        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+        var eventId = GetSegment(req.Path, 1);
+        var body    = Deserialize<SaveDesignRequest>(req.Body);
+        if (body is null) return ErrorResponse(400, "BAD_REQUEST", "Invalid request body");
+
+        // Load entity, update DesignJson, persist directly via repository
+        var repo   = _services.GetRequiredService<IEventRepository>();
+        var entity = await repo.GetByIdAsync(eventId);
+        if (entity is null || entity.UserId != userId) return NotFoundResponse();
+        entity.DesignJson = body.CanvasJson;
+        await repo.UpdateAsync(entity);
+        return OkResponse(ApiResponse<object>.Ok(new { saved = true }));
     }
 
     // ── Response helpers ──────────────────────────────────────────────────────
@@ -189,16 +212,16 @@ public class EventsHandler
         => new()
         {
             StatusCode = statusCode,
-            Headers = CorsHeaders(),
-            Body = JsonSerializer.Serialize(data, _json)
+            Headers    = CorsHeaders(),
+            Body       = JsonSerializer.Serialize(data, _json)
         };
 
     private static APIGatewayProxyResponse ErrorResponse(int statusCode, string code, string message)
         => new()
         {
             StatusCode = statusCode,
-            Headers = CorsHeaders(),
-            Body = JsonSerializer.Serialize(ApiResponse<object>.Fail(message, code), _json)
+            Headers    = CorsHeaders(),
+            Body       = JsonSerializer.Serialize(ApiResponse<object>.Fail(message, code), _json)
         };
 
     private static APIGatewayProxyResponse NotFoundResponse()
@@ -207,8 +230,8 @@ public class EventsHandler
     private static Dictionary<string, string> CorsHeaders()
         => new()
         {
-            ["Content-Type"] = "application/json",
-            ["Access-Control-Allow-Origin"] = "*",
+            ["Content-Type"]                 = "application/json",
+            ["Access-Control-Allow-Origin"]  = "*",
             ["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS",
             ["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
         };

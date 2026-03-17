@@ -1,8 +1,9 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { EcNav } from '@/components/ui/EcNav';
-import { useAuth } from '@/hooks/useAuth';
+import { EcNav }     from '@/components/ui/EcNav';
+import { useAuth }   from '@/hooks/useAuth';
+import { useEvent }  from '@/hooks/useEvents';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { CanvasShell } from '@/components/canvas/CanvasShell';
@@ -10,6 +11,7 @@ import { CanvasShell } from '@/components/canvas/CanvasShell';
 export default function DesignPage() {
   const { eventId } = useParams<{ eventId: string }>();
   const { user, loading } = useAuth();
+  const { data: event }   = useEvent(eventId);
   const router = useRouter();
 
   useEffect(() => {
@@ -25,7 +27,7 @@ export default function DesignPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--ec-bg)', display: 'flex', flexDirection: 'column' }}>
       <EcNav email={user?.email} />
-      <CanvasShell eventId={eventId} />
+      <CanvasShell eventId={eventId} eventTitle={event?.title} />
     </div>
   );
 }
