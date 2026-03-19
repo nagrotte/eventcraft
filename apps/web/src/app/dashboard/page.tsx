@@ -8,6 +8,17 @@ import { EcNav }    from '@/components/ui/EcNav';
 import { EcButton } from '@/components/ui/EcButton';
 import { EcInput }  from '@/components/ui/EcInput';
 import { EcBadge }  from '@/components/ui/EcBadge';
+import apiClient from '@/lib/api-client';
+
+
+interface RsvpEntry {
+  rsvpId:    string;
+  name:      string;
+  email:     string;
+  response:  string;
+  message?:  string;
+  createdAt: string;
+}
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
@@ -23,7 +34,9 @@ export default function DashboardPage() {
   const [date,     setDate]     = useState('');
   const [location, setLocation] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId,  setExpandedId]  = useState<string | null>(null);
+  const [rsvps,       setRsvps]       = useState<Record<string, RsvpEntry[]>>({});
+  const [loadingRsvp, setLoadingRsvp] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/auth/login');
@@ -122,7 +135,7 @@ export default function DashboardPage() {
                     </EcButton>
                     <EcButton
                       variant="ghost" size="sm"
-                      onClick={() => setExpandedId(expandedId === event.eventId ? null : event.eventId)}
+                      onClick={() => { toggleExpand(event.eventId); }}
                       title="RSVP & links"
                       style={{ padding: '0 8px' }}
                     >
