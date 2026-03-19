@@ -16,8 +16,8 @@ export default function HomePage() {
   }, [user, loading, router]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-950">
-      <div className="text-white text-lg">Loading...</div>
+    <div style={{ minHeight: '100vh', background: 'var(--ec-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="ec-spinner" />
     </div>
   );
 }

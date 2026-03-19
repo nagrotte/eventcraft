@@ -1,6 +1,8 @@
 using Amazon.DynamoDBv2;
 using Amazon.Lambda.APIGatewayEvents;
 using Amazon.Lambda.Core;
+using Amazon.S3;
+using Amazon.S3.Model;
 using EventCraft.Events.Commands;
 using EventCraft.Events.Models;
 using EventCraft.Events.Queries;
@@ -19,6 +21,7 @@ public class EventsHandler
 {
     private static readonly IServiceProvider _services;
     private static readonly IMediator        _mediator;
+    private static readonly string           _mediaBucket;
 
     private static readonly JsonSerializerOptions _json = new()
     {
@@ -29,14 +32,17 @@ public class EventsHandler
 
     static EventsHandler()
     {
-        var env       = Environment.GetEnvironmentVariable("ENVIRONMENT")    ?? "staging";
-        var tableName = Environment.GetEnvironmentVariable("DYNAMODB_TABLE") ?? $"eventcraft-{env}";
-        var awsRegion = Environment.GetEnvironmentVariable("AWS_REGION")     ?? "us-east-1";
+        var env        = Environment.GetEnvironmentVariable("ENVIRONMENT")    ?? "staging";
+        var tableName  = Environment.GetEnvironmentVariable("DYNAMODB_TABLE") ?? $"eventcraft-{env}";
+        var awsRegion  = Environment.GetEnvironmentVariable("AWS_REGION")     ?? "us-east-1";
+        _mediaBucket   = Environment.GetEnvironmentVariable("MEDIA_BUCKET")   ?? $"eventcraft-media-{env}";
 
         var sc = new ServiceCollection();
         sc.AddLogging(b => b.AddConsole());
         sc.AddSingleton<IAmazonDynamoDB>(_ =>
             new AmazonDynamoDBClient(Amazon.RegionEndpoint.GetBySystemName(awsRegion)));
+        sc.AddSingleton<IAmazonS3>(_ =>
+            new AmazonS3Client(Amazon.RegionEndpoint.GetBySystemName(awsRegion)));
         sc.AddSingleton<IEventRepository>(sp =>
             new DynamoEventRepository(
                 sp.GetRequiredService<IAmazonDynamoDB>(),
@@ -61,33 +67,35 @@ public class EventsHandler
 
         try
         {
-            if (method == "GET"    && path == "/health")
-                return Health();
+            if (method == "GET"    && path == "/health")               return Health();
+            if (method == "GET"    && path == "/events")               return await ListEvents(request);
+            if (method == "POST"   && path == "/events")               return await CreateEvent(request);
 
-            if (method == "GET"    && path == "/events")
-                return await ListEvents(request);
-
-            if (method == "POST"   && path == "/events")
-                return await CreateEvent(request);
-
-            // Design routes — must come before generic /events/{id} GET
+            // Design routes
             if (method == "GET"    && path.StartsWith("/events/") && path.EndsWith("/design"))
                 return await GetDesign(request);
-
             if (method == "POST"   && path.StartsWith("/events/") && path.EndsWith("/design"))
                 return await SaveDesign(request);
 
-            if (method == "GET"    && path.StartsWith("/events/"))
-                return await GetEvent(request);
+            // Upload presigned URL
+            if (method == "POST"   && path.StartsWith("/events/") && path.EndsWith("/upload-url"))
+                return await GetUploadUrl(request);
 
+            // RSVP — public (no auth) + admin list
+            if (method == "POST"   && path.StartsWith("/events/") && path.EndsWith("/rsvp"))
+                return await SubmitRsvp(request);
+            if (method == "GET"    && path.StartsWith("/events/") && path.EndsWith("/rsvp"))
+                return await ListRsvps(request);
+
+            // Public event page (no auth required)
+            if (method == "GET"    && path.StartsWith("/events/") && path.EndsWith("/public"))
+                return await GetPublicEvent(request);
+
+            if (method == "GET"    && path.StartsWith("/events/"))     return await GetEvent(request);
             if (method == "PUT"    && path.StartsWith("/events/") && path.EndsWith("/publish"))
                 return await PublishEvent(request);
-
-            if (method == "PUT"    && path.StartsWith("/events/"))
-                return await UpdateEvent(request);
-
-            if (method == "DELETE" && path.StartsWith("/events/"))
-                return await DeleteEvent(request);
+            if (method == "PUT"    && path.StartsWith("/events/"))     return await UpdateEvent(request);
+            if (method == "DELETE" && path.StartsWith("/events/"))     return await DeleteEvent(request);
 
             return NotFoundResponse();
         }
@@ -101,12 +109,7 @@ public class EventsHandler
     // ── Handlers ──────────────────────────────────────────────────────────────
 
     private static APIGatewayProxyResponse Health()
-        => OkResponse(new {
-            status      = "ok",
-            service     = "eventcraft-events",
-            environment = Environment.GetEnvironmentVariable("ENVIRONMENT") ?? "staging",
-            timestamp   = DateTime.UtcNow.ToString("O")
-        });
+        => OkResponse(new { status = "ok", service = "eventcraft-events", timestamp = DateTime.UtcNow.ToString("O") });
 
     private async Task<APIGatewayProxyResponse> CreateEvent(APIGatewayProxyRequest req)
     {
@@ -131,12 +134,29 @@ public class EventsHandler
         return OkResponse(ApiResponse<EventEntity>.Ok(result));
     }
 
+    private async Task<APIGatewayProxyResponse> GetPublicEvent(APIGatewayProxyRequest req)
+    {
+        var eventId = GetSegment(req.Path, 1);
+        var repo    = _services.GetRequiredService<IEventRepository>();
+        var entity  = await repo.GetByIdAsync(eventId);
+        if (entity is null) return NotFoundResponse();
+        // Return safe public subset only
+        return OkResponse(ApiResponse<object>.Ok(new {
+            eventId  = entity.EventId,
+            title    = entity.Title,
+            eventDate = entity.EventDate,
+            location = entity.Location,
+            description = entity.Description,
+            canvasJson = entity.DesignJson,
+            status   = entity.Status,
+        }));
+    }
+
     private async Task<APIGatewayProxyResponse> ListEvents(APIGatewayProxyRequest req)
     {
         var userId = GetUserId(req);
         if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
-        string? limitStr = null;
-        string? cursor   = null;
+        string? limitStr = null, cursor = null;
         req.QueryStringParameters?.TryGetValue("limit",  out limitStr);
         req.QueryStringParameters?.TryGetValue("cursor", out cursor);
         int.TryParse(limitStr ?? "20", out var limit);
@@ -196,47 +216,79 @@ public class EventsHandler
         var eventId = GetSegment(req.Path, 1);
         var body    = Deserialize<SaveDesignRequest>(req.Body);
         if (body is null) return ErrorResponse(400, "BAD_REQUEST", "Invalid request body");
-
-        // Load entity, update DesignJson, persist directly via repository
-        var repo   = _services.GetRequiredService<IEventRepository>();
-        var entity = await repo.GetByIdAsync(eventId);
+        var repo    = _services.GetRequiredService<IEventRepository>();
+        var entity  = await repo.GetByIdAsync(eventId);
         if (entity is null || entity.UserId != userId) return NotFoundResponse();
         entity.DesignJson = body.CanvasJson;
         await repo.UpdateAsync(entity);
         return OkResponse(ApiResponse<object>.Ok(new { saved = true }));
     }
 
+    private async Task<APIGatewayProxyResponse> GetUploadUrl(APIGatewayProxyRequest req)
+    {
+        var userId  = GetUserId(req);
+        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+        var eventId = GetSegment(req.Path, 1);
+        var body    = Deserialize<UploadUrlRequest>(req.Body);
+        if (body is null) return ErrorResponse(400, "BAD_REQUEST", "Invalid request body");
+
+        var s3     = _services.GetRequiredService<IAmazonS3>();
+        var key    = $"uploads/{userId}/{eventId}/{Guid.NewGuid()}-{body.FileName}";
+        var urlReq = new GetPreSignedUrlRequest
+        {
+            BucketName  = _mediaBucket,
+            Key         = key,
+            Verb        = HttpVerb.PUT,
+            Expires     = DateTime.UtcNow.AddMinutes(10),
+            ContentType = body.ContentType,
+        };
+        var presignedUrl = s3.GetPreSignedURL(urlReq);
+        var publicUrl    = $"https://{_mediaBucket}.s3.amazonaws.com/{key}";
+
+        return OkResponse(ApiResponse<object>.Ok(new { uploadUrl = presignedUrl, publicUrl }));
+    }
+
+    private async Task<APIGatewayProxyResponse> SubmitRsvp(APIGatewayProxyRequest req)
+    {
+        var eventId = GetSegment(req.Path, 1);
+        var body    = Deserialize<RsvpRequest>(req.Body);
+        if (body is null) return ErrorResponse(400, "BAD_REQUEST", "Invalid request body");
+        if (string.IsNullOrWhiteSpace(body.Name) || string.IsNullOrWhiteSpace(body.Email))
+            return ErrorResponse(400, "VALIDATION_ERROR", "Name and email are required");
+
+        var repo = _services.GetRequiredService<IEventRepository>();
+        await repo.SaveRsvpAsync(eventId, body);
+        return OkResponse(ApiResponse<object>.Ok(new { submitted = true }));
+    }
+
+    private async Task<APIGatewayProxyResponse> ListRsvps(APIGatewayProxyRequest req)
+    {
+        var userId  = GetUserId(req);
+        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+        var eventId = GetSegment(req.Path, 1);
+        var repo    = _services.GetRequiredService<IEventRepository>();
+        var rsvps   = await repo.ListRsvpsAsync(eventId);
+        return OkResponse(ApiResponse<object>.Ok(rsvps));
+    }
+
     // ── Response helpers ──────────────────────────────────────────────────────
 
     private static APIGatewayProxyResponse OkResponse(object data, int statusCode = 200)
-        => new()
-        {
-            StatusCode = statusCode,
-            Headers    = CorsHeaders(),
-            Body       = JsonSerializer.Serialize(data, _json)
-        };
+        => new() { StatusCode = statusCode, Headers = CorsHeaders(), Body = JsonSerializer.Serialize(data, _json) };
 
     private static APIGatewayProxyResponse ErrorResponse(int statusCode, string code, string message)
-        => new()
-        {
-            StatusCode = statusCode,
-            Headers    = CorsHeaders(),
-            Body       = JsonSerializer.Serialize(ApiResponse<object>.Fail(message, code), _json)
-        };
+        => new() { StatusCode = statusCode, Headers = CorsHeaders(), Body = JsonSerializer.Serialize(ApiResponse<object>.Fail(message, code), _json) };
 
     private static APIGatewayProxyResponse NotFoundResponse()
         => ErrorResponse(404, "NOT_FOUND", "Resource not found");
 
-    private static Dictionary<string, string> CorsHeaders()
-        => new()
-        {
-            ["Content-Type"]                 = "application/json",
-            ["Access-Control-Allow-Origin"]  = "*",
-            ["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS",
-            ["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
-        };
-
-    // ── Utilities ─────────────────────────────────────────────────────────────
+    private static Dictionary<string, string> CorsHeaders() => new()
+    {
+        ["Content-Type"]                 = "application/json",
+        ["Access-Control-Allow-Origin"]  = "*",
+        ["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS",
+        ["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+    };
 
     private static string? GetUserId(APIGatewayProxyRequest req)
     {

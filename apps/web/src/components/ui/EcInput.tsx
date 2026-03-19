@@ -1,9 +1,9 @@
 import { InputHTMLAttributes } from 'react';
 
 interface EcInputProps extends InputHTMLAttributes<HTMLInputElement> {
-  label?:    string;
-  error?:    string;
-  hint?:     string;
+  label?:  string;
+  error?:  string;
+  hint?:   string;
 }
 
 export function EcInput({ label, error, hint, className = '', id, ...props }: EcInputProps) {

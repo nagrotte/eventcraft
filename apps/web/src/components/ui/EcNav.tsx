@@ -2,26 +2,57 @@
 
 import { useTheme } from '@/components/ui/ThemeProvider';
 import { EcButton } from '@/components/ui/EcButton';
+import Link from 'next/link';
 
-interface EcNavProps {
-  email?:    string;
-  onLogout?: () => void;
+interface Breadcrumb {
+  label: string;
+  href?: string;
 }
 
-export function EcNav({ email, onLogout }: EcNavProps) {
+interface EcNavProps {
+  email?:       string;
+  onLogout?:    () => void;
+  breadcrumbs?: Breadcrumb[];
+}
+
+export function EcNav({ email, onLogout, breadcrumbs }: EcNavProps) {
   const { theme, toggleTheme } = useTheme();
 
   return (
     <nav className="ec-nav">
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div className="ec-logo-mark">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M2 7.5L5.5 11L12 3" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </div>
-        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--ec-text-1)', letterSpacing: '-0.02em' }}>
-          EventCraft
-        </span>
+        <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
+          <div className="ec-logo-mark" style={{ width: 28, height: 28, flexShrink: 0 }}>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M2 6.5L4.5 9L10 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--ec-text-1)', letterSpacing: '-0.02em' }}>
+            EventCraft
+          </span>
+        </Link>
+
+        {breadcrumbs && breadcrumbs.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {breadcrumbs.map((crumb, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 12, color: 'var(--ec-text-3)' }}>/</span>
+                {crumb.href ? (
+                  <Link
+                    href={crumb.href}
+                    style={{ fontSize: 12, color: 'var(--ec-text-2)', textDecoration: 'none' }}
+                  >
+                    {crumb.label}
+                  </Link>
+                ) : (
+                  <span style={{ fontSize: 12, color: 'var(--ec-text-1)', fontWeight: 500 }}>
+                    {crumb.label}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

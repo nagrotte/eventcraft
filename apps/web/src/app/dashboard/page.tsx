@@ -9,6 +9,8 @@ import { EcButton } from '@/components/ui/EcButton';
 import { EcInput }  from '@/components/ui/EcInput';
 import { EcBadge }  from '@/components/ui/EcBadge';
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+
 export default function DashboardPage() {
   const { user, loading: authLoading, logout } = useAuth();
   const { data: events, isLoading }            = useEvents();
@@ -20,6 +22,8 @@ export default function DashboardPage() {
   const [title,    setTitle]    = useState('');
   const [date,     setDate]     = useState('');
   const [location, setLocation] = useState('');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/auth/login');
@@ -36,6 +40,16 @@ export default function DashboardPage() {
     setShowForm(false);
   }
 
+  function getRsvpUrl(eventId: string) {
+    return `${APP_URL}/rsvp/${eventId}`;
+  }
+
+  async function copyLink(eventId: string) {
+    await navigator.clipboard.writeText(getRsvpUrl(eventId));
+    setCopiedId(eventId);
+    setTimeout(() => setCopiedId(null), 2000);
+  }
+
   if (authLoading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--ec-bg)' }}>
       <div className="ec-spinner" />
@@ -45,7 +59,6 @@ export default function DashboardPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--ec-bg)' }}>
       <EcNav email={user?.email} onLogout={logout} />
-
       <main className="ec-page">
 
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>
@@ -83,46 +96,114 @@ export default function DashboardPage() {
           </div>
         ) : !events || events.length === 0 ? (
           <div className="ec-empty">
-            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" style={{ marginBottom: 12, opacity: 0.3 }}>
-              <rect x="4" y="6" width="24" height="22" rx="3" stroke="var(--ec-text-2)" strokeWidth="1.5"/>
-              <path d="M10 4v4M22 4v4M4 12h24" stroke="var(--ec-text-2)" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
             <p style={{ fontSize: 14, color: 'var(--ec-text-2)', fontWeight: 500 }}>No events yet</p>
             <p style={{ fontSize: 12, color: 'var(--ec-text-3)', marginTop: 4 }}>Click "New event" to get started</p>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {events.map(event => (
-              <div key={event.eventId} className="ec-row">
-                <div style={{ minWidth: 0 }}>
-                  <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--ec-text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {event.title}
-                  </p>
-                  <p style={{ fontSize: 12, color: 'var(--ec-text-3)', marginTop: 2 }}>
-                    {new Date(event.eventDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-                    {event.location && <span> · {event.location}</span>}
-                  </p>
+              <div key={event.eventId} style={{ borderRadius: 'var(--ec-radius-lg)', border: '1px solid var(--ec-border)', background: 'var(--ec-surface)', overflow: 'hidden' }}>
+
+                {/* Main row */}
+                <div className="ec-row" style={{ border: 'none' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--ec-text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {event.title}
+                    </p>
+                    <p style={{ fontSize: 12, color: 'var(--ec-text-3)', marginTop: 2 }}>
+                      {new Date(event.eventDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                      {event.location && <span> · {event.location}</span>}
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 16 }}>
+                    <EcBadge status={event.status} />
+                    <EcButton variant="secondary" size="sm" onClick={() => router.push(`/events/${event.eventId}/design`)}>
+                      Design
+                    </EcButton>
+                    <EcButton
+                      variant="ghost" size="sm"
+                      onClick={() => setExpandedId(expandedId === event.eventId ? null : event.eventId)}
+                      title="RSVP & links"
+                      style={{ padding: '0 8px' }}
+                    >
+                      {expandedId === event.eventId ? '▲' : '▼'}
+                    </EcButton>
+                    <EcButton
+                      variant="ghost" size="sm"
+                      onClick={() => deleteEvent.mutate(event.eventId)}
+                      style={{ padding: '0 6px', color: 'var(--ec-text-3)' }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                        <path d="M2 3h9M5 3V2h3v1M4.5 3l.5 7.5M8.5 3l-.5 7.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                      </svg>
+                    </EcButton>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, marginLeft: 16 }}>
-                  <EcBadge status={event.status} />
-                  <EcButton
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => router.push(`/events/${event.eventId}/design`)}
-                  >
-                    Design
-                  </EcButton>
-                  <EcButton
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => deleteEvent.mutate(event.eventId)}
-                    style={{ padding: '0 6px', color: 'var(--ec-text-3)' }}
-                  >
-                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-                      <path d="M2 3h9M5 3V2h3v1M4.5 3l.5 7.5M8.5 3l-.5 7.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-                    </svg>
-                  </EcButton>
-                </div>
+
+                {/* Expanded RSVP panel */}
+                {expandedId === event.eventId && (
+                  <div style={{ padding: '12px 16px 14px', borderTop: '1px solid var(--ec-border)', background: 'var(--ec-surface-raised)' }}>
+                    <p style={{ fontSize: 11, color: 'var(--ec-text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+                      RSVP Link
+                    </p>
+
+                    {/* Link display */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <div style={{
+                        flex: 1, padding: '7px 10px', background: 'var(--ec-bg)',
+                        border: '1px solid var(--ec-border)', borderRadius: 'var(--ec-radius-sm)',
+                        fontSize: 11, color: 'var(--ec-text-2)', fontFamily: 'monospace',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {getRsvpUrl(event.eventId)}
+                      </div>
+                      <EcButton
+                        size="sm"
+                        variant={copiedId === event.eventId ? 'secondary' : 'ghost'}
+                        onClick={() => copyLink(event.eventId)}
+                        style={{ flexShrink: 0 }}
+                      >
+                        {copiedId === event.eventId ? '✓ Copied' : 'Copy'}
+                      </EcButton>
+                      <EcButton
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => router.push(`/rsvp/${event.eventId}`)}
+                        style={{ flexShrink: 0 }}
+                      >
+                        Preview
+                      </EcButton>
+                    </div>
+
+                    {/* Quick actions */}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <EcButton
+                        size="sm"
+                        variant="ghost"
+                        onClick={async () => {
+                          const QRCode = (await import('qrcode')).default;
+                          const dataUrl = await QRCode.toDataURL(getRsvpUrl(event.eventId), { width: 300, margin: 2 });
+                          const a = document.createElement('a');
+                          a.href = dataUrl;
+                          a.download = `qr-${event.title}.png`;
+                          a.click();
+                        }}
+                      >
+                        ⊞ Download QR
+                      </EcButton>
+                      <EcButton
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          const whatsapp = `https://wa.me/?text=${encodeURIComponent(`You're invited to ${event.title}! RSVP here: ${getRsvpUrl(event.eventId)}`)}`;
+                          window.open(whatsapp, '_blank');
+                        }}
+                      >
+                        Share via WhatsApp
+                      </EcButton>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
