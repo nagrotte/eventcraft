@@ -1,7 +1,19 @@
 {
   "$schema": "https://turborepo.com/schema.json",
   "tasks": {
-    "build":     { "dependsOn": ["^build"], "outputs": [".next/**",".expo/**","dist/**"] },
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", ".expo/**", "dist/**"],
+      "env": [
+        "NEXT_PUBLIC_COGNITO_POOL_ID",
+        "NEXT_PUBLIC_COGNITO_CLIENT_ID",
+        "NEXT_PUBLIC_API_URL",
+        "NEXT_PUBLIC_APP_URL",
+        "NEXT_PUBLIC_UNSPLASH_ACCESS_KEY",
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY"
+      ]
+    },
     "dev":       { "persistent": true, "cache": false },
     "lint":      { "dependsOn": ["^build"] },
     "test":      { "dependsOn": ["^build"], "outputs": ["coverage/**"] },
