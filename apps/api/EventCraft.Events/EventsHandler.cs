@@ -263,8 +263,6 @@ public class EventsHandler
 
     private async Task<APIGatewayProxyResponse> ListRsvps(APIGatewayProxyRequest req)
     {
-        var userId  = GetUserId(req);
-        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
         var eventId = GetSegment(req.Path, 1);
         var repo    = _services.GetRequiredService<IEventRepository>();
         var rsvps   = await repo.ListRsvpsAsync(eventId);
@@ -317,3 +315,4 @@ public class EventsHandler
         catch { return null; }
     }
 }
+
