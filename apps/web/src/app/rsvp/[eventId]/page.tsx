@@ -47,10 +47,8 @@ export default function RsvpPage() {
   // Calculate scale to fit canvas in container
   useEffect(() => {
     function calcScale() {
-      if (!containerRef.current) return;
-      const containerWidth = containerRef.current.clientWidth - 32;
-      const canvasWidth    = 600;
-      setCanvasScale(Math.min(1, containerWidth / canvasWidth));
+      const vw = Math.min(window.innerWidth, 640) - 32;
+      setCanvasScale(Math.min(1, vw / 600));
     }
     calcScale();
     window.addEventListener('resize', calcScale);
@@ -123,20 +121,17 @@ export default function RsvpPage() {
         </div>
       </div>
 
-      <div ref={containerRef} style={{ maxWidth: 640, margin: '0 auto', padding: '16px' }}>
+      <div style={{ maxWidth: 640, margin: '0 auto', padding: '16px' }}>
 
         {/* Canvas design — scaled to fit mobile */}
         {event?.canvasJson && (
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24, overflow: 'hidden' }}>
+          <div style={{ width: '100%', marginBottom: 24, overflow: 'hidden', borderRadius: 4, boxShadow: '0 8px 40px rgba(0,0,0,0.6)' }}>
             <div style={{
-              transformOrigin: 'top center',
-              transform: `scale(${canvasScale})`,
               width: 600,
-              height: 850 * canvasScale,
+              height: 850,
+              transformOrigin: 'top left',
+              transform: `scale(${canvasScale})`,
               marginBottom: -(850 * (1 - canvasScale)),
-              boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
-              borderRadius: 4,
-              overflow: 'hidden',
             }}>
               <canvas ref={canvasRef} style={{ display: 'block' }} />
             </div>
@@ -239,4 +234,3 @@ export default function RsvpPage() {
     </div>
   );
 }
- 
