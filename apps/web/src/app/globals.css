@@ -369,3 +369,33 @@ body { min-height: 100vh; }
   border-color: var(--ec-border-mid);
   background:   var(--ec-surface-raised);
 }
+
+/* ── Mobile responsive additions ─────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Nav — hide email on small screens */
+  .ec-nav {
+    padding: 0 12px;
+  }
+
+  /* Dashboard page padding */
+  .ec-page {
+    padding: 24px 16px;
+  }
+
+  /* Event row — stack buttons on very small screens */
+  .ec-row {
+    padding: 10px 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* Breadcrumbs — truncate long names */
+  .ec-nav a, .ec-nav span {
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
