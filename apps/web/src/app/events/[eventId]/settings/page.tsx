@@ -189,7 +189,7 @@ export default function EventSettingsPage() {
         // Upload directly to S3
         const s3Res = await fetch(urlData.url, {
           method:  'PUT',
-          headers: { 'Content-Type': file.type || 'image/jpeg' },
+          headers: {},
           body:    file,
         });
         if (!s3Res.ok) throw new Error('S3 upload failed');
