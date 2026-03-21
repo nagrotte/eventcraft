@@ -80,8 +80,12 @@ export function TemplatesPanel({ fabricRef, eventTitle, eventDate, eventLocation
       // Note: canvas stays at its initialized dimensions (600x850)
       // Square templates (like mandala) will be centered within the standard canvas
 
-      canvas.clear();
+      // Remove all objects without destroying canvas context
+      const objects = canvas.getObjects();
+      canvas.discardActiveObject();
+      canvas.remove(...objects);
       canvas.backgroundColor = t.bgColor;
+      canvas.renderAll();
 
       // Sort layers by zIndex
       const sortedLayers = [...t.layers].sort((a, b) => a.zIndex - b.zIndex);
