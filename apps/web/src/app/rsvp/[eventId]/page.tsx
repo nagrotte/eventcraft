@@ -112,7 +112,7 @@ export default function RsvpPage() {
       <style>{`@keyframes spin { to { transform: rotate(360deg); } } * { box-sizing: border-box; }`}</style>
 
       {/* EventCraft logo */}
-      <div style={{ textAlign: 'center', padding: '24px 16px 8px' }}>
+      <div style={{ textAlign: 'center', padding: '24px 16px 8px', cursor: 'pointer' }} onClick={() => window.location.href='https://eventcraft.irotte.com'}>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
           <svg width="22" height="22" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
             <ellipse cx="20" cy="28" rx="5" ry="7" fill="#4F46E5" opacity="0.9"/>
