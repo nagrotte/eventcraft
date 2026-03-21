@@ -111,13 +111,23 @@ export default function RsvpPage() {
     <div style={{ minHeight: '100vh', background: '#0a0a12', fontFamily: 'Inter, sans-serif' }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } } * { box-sizing: border-box; }`}</style>
 
-      {/* EventCraft branding */}
-      <div style={{ textAlign: 'center', padding: '24px 16px 0' }}>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 20 }}>
-          <div style={{ width: 18, height: 18, background: '#6366F1', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6.5L4.5 9L10 3" stroke="white" strokeWidth="1.5" strokeLinecap="round"/></svg>
-          </div>
-          <span style={{ fontSize: 12, color: '#6366F1', fontWeight: 500 }}>EventCraft</span>
+      {/* EventCraft logo */}
+      <div style={{ textAlign: 'center', padding: '24px 16px 8px' }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <svg width="22" height="22" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <ellipse cx="20" cy="28" rx="5" ry="7" fill="#4F46E5" opacity="0.9"/>
+            <ellipse cx="20" cy="28" rx="5" ry="7" fill="#6366F1" transform="rotate(45 20 20)"/>
+            <ellipse cx="20" cy="28" rx="5" ry="7" fill="#4F46E5" transform="rotate(90 20 20)"/>
+            <ellipse cx="20" cy="28" rx="5" ry="7" fill="#6366F1" transform="rotate(135 20 20)"/>
+            <ellipse cx="20" cy="28" rx="5" ry="7" fill="#4F46E5" transform="rotate(180 20 20)"/>
+            <ellipse cx="20" cy="28" rx="5" ry="7" fill="#6366F1" transform="rotate(225 20 20)"/>
+            <ellipse cx="20" cy="28" rx="5" ry="7" fill="#4F46E5" transform="rotate(270 20 20)"/>
+            <ellipse cx="20" cy="28" rx="5" ry="7" fill="#6366F1" transform="rotate(315 20 20)"/>
+            <circle cx="20" cy="20" r="4" fill="#D4AF37"/>
+          </svg>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#6366F1', fontFamily: 'Georgia, serif', letterSpacing: '0.01em' }}>
+            event<span style={{ color: '#D4AF37' }}>craft</span>
+          </span>
         </div>
       </div>
 
