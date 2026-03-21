@@ -11,7 +11,6 @@ import { LogoMark } from '@/components/ui/LogoMark';
 export default function RegisterPage() {
   const { register, confirm, login } = useAuth();
   const router = useRouter();
-
   const [step,     setStep]     = useState<'register' | 'confirm'>('register');
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
@@ -25,7 +24,14 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await register(email, password);
-      setStep('confirm');
+      // Try auto-login first (works if Lambda auto-confirm is set)
+      try {
+        await login(email, password);
+        router.push('/dashboard');
+      } catch {
+        // If login fails, user needs email confirmation
+        setStep('confirm');
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Registration failed');
     } finally {
@@ -51,94 +57,48 @@ export default function RegisterPage() {
   return (
     <div className="ec-auth-bg">
       <div className="ec-auth-card">
-
         <LogoMark />
-
         <div className="ec-card" style={{ padding: 32 }}>
-
           {step === 'register' ? (
             <>
               <div style={{ marginBottom: 24 }}>
                 <h1 style={{ fontSize: 20, fontWeight: 600, color: 'var(--ec-text-1)', letterSpacing: '-0.02em', marginBottom: 4 }}>
                   Create account
                 </h1>
-                <p style={{ fontSize: 13, color: 'var(--ec-text-2)' }}>
-                  Get started with EventCraft for free
-                </p>
+                <p style={{ fontSize: 13, color: 'var(--ec-text-2)' }}>Get started with EventCraft for free</p>
               </div>
-
               <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <EcInput
-                  label="Email"
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="you@company.com"
-                  required
-                />
-                <EcInput
-                  label="Password"
-                  type="password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="Minimum 8 characters"
-                  required
-                  minLength={8}
-                />
+                <EcInput label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required />
+                <EcInput label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Minimum 8 characters" required minLength={8} />
                 {error && <div className="ec-error">{error}</div>}
-                <EcButton type="submit" fullWidth loading={loading}>
-                  Create account
-                </EcButton>
+                <EcButton type="submit" fullWidth loading={loading}>Create account</EcButton>
               </form>
-
               <div className="ec-divider" />
-
               <p style={{ fontSize: 12, color: 'var(--ec-text-3)', textAlign: 'center' }}>
                 Already have an account?{' '}
-                <Link href="/auth/login" style={{ color: 'var(--ec-brand)', textDecoration: 'none', fontWeight: 500 }}>
-                  Sign in
-                </Link>
+                <Link href="/auth/login" style={{ color: 'var(--ec-brand)', textDecoration: 'none', fontWeight: 500 }}>Sign in</Link>
               </p>
             </>
           ) : (
             <>
               <div style={{ marginBottom: 24 }}>
-                <div style={{
-                  width: 40, height: 40, borderRadius: '50%',
-                  background: 'var(--ec-success-bg)',
-                  border: '1px solid var(--ec-success-border)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  marginBottom: 16
-                }}>
+                <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--ec-success-bg)', border: '1px solid var(--ec-success-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                     <path d="M3 8.5L6.5 12L13 4" stroke="var(--ec-success)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </div>
-                <h1 style={{ fontSize: 20, fontWeight: 600, color: 'var(--ec-text-1)', letterSpacing: '-0.02em', marginBottom: 4 }}>
-                  Check your email
-                </h1>
+                <h1 style={{ fontSize: 20, fontWeight: 600, color: 'var(--ec-text-1)', letterSpacing: '-0.02em', marginBottom: 4 }}>Check your email</h1>
                 <p style={{ fontSize: 13, color: 'var(--ec-text-2)' }}>
                   We sent a 6-digit code to <strong style={{ color: 'var(--ec-text-1)' }}>{email}</strong>
                 </p>
               </div>
-
               <form onSubmit={handleConfirm} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <EcInput
-                  label="Confirmation code"
-                  type="text"
-                  value={code}
-                  onChange={e => setCode(e.target.value)}
-                  placeholder="123456"
-                  required
-                />
+                <EcInput label="Confirmation code" type="text" value={code} onChange={e => setCode(e.target.value)} placeholder="123456" required />
                 {error && <div className="ec-error">{error}</div>}
-                <EcButton type="submit" fullWidth loading={loading}>
-                  Verify email
-                </EcButton>
+                <EcButton type="submit" fullWidth loading={loading}>Verify email</EcButton>
               </form>
             </>
           )}
-
         </div>
       </div>
     </div>

@@ -68,7 +68,11 @@ public class EventsHandler
         try
         {
             if (method == "GET"    && path == "/health")               return Health();
-            if (method == "GET"    && path == "/events")               return await ListEvents(request);
+            if (method == "GET"    && path == "/admin/users")                                          return await ListUsers(request);
+              if (method == "POST"   && path.StartsWith("/admin/users/") && path.EndsWith("/enable"))  return await EnableUser(request);
+              if (method == "POST"   && path.StartsWith("/admin/users/") && path.EndsWith("/disable")) return await DisableUser(request);
+              if (method == "DELETE" && path.StartsWith("/admin/users/"))                              return await DeleteUser(request);
+              if (method == "GET"    && path == "/events")               return await ListEvents(request);
             if (method == "POST"   && path == "/events")               return await CreateEvent(request);
 
             // Design routes
