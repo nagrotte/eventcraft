@@ -17,7 +17,12 @@ export interface EventEntity {
   tags:         string[];
   createdAt:    string;
   updatedAt:    string;
-  designJson?:  string;
+  designJson?:      string;
+  schedule?:        string;
+  organizerName?:   string;
+  organizerPhone?:  string;
+  organizerEmail?:  string;
+  galleryUrl?:      string;
 }
 
 export interface CreateEventInput {
