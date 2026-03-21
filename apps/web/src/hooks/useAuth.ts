@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { signIn, signOut, signUp, confirmSignUp, fetchAuthSession, getCurrentUser } from 'aws-amplify/auth';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface AuthUser {
   email: string;
@@ -12,6 +13,7 @@ export function useAuth() {
   const [user,    setUser]    = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     checkUser();
@@ -44,6 +46,8 @@ export function useAuth() {
     await signOut();
     setUser(null);
     setIsAdmin(false);
+    // Clear ALL cached data so next user doesn't see previous user's data
+    queryClient.clear();
   }
 
   async function register(email: string, password: string) {
