@@ -24,4 +24,9 @@ public class EventEntity
     public string? RsvpDeadline { get; set; }
     public string CreatedAt     { get; set; } = default!;
     public string UpdatedAt     { get; set; } = default!;
+    public string? Schedule       { get; set; }
+    public string? OrganizerName  { get; set; }
+    public string? OrganizerPhone { get; set; }
+    public string? OrganizerEmail { get; set; }
+    public string? GalleryUrl     { get; set; }
 }

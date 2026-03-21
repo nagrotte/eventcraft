@@ -8,15 +8,17 @@ namespace EventCraft.Events.Repositories;
 
 public class DynamoEventRepository : IEventRepository
 {
-    private readonly IAmazonDynamoDB              _dynamo;
+    private readonly IAmazonDynamoDB                _dynamo;
     private readonly ILogger<DynamoEventRepository> _log;
-    private readonly string                       _table;
+    private readonly string                         _table;
 
     private static string PK(string eventId) => $"EVENT#{eventId}";
     private const  string SK = "METADATA";
 
     public DynamoEventRepository(IAmazonDynamoDB dynamo, ILogger<DynamoEventRepository> log, string table)
     { _dynamo = dynamo; _log = log; _table = table; }
+
+    // ── Events ────────────────────────────────────────────────────────────────
 
     public async Task<EventEntity?> GetByIdAsync(string eventId, CancellationToken ct = default)
     {
@@ -31,6 +33,23 @@ public class DynamoEventRepository : IEventRepository
         }, ct);
         if (!response.IsItemSet) return null;
         return Map(response.Item);
+    }
+
+    public async Task<EventEntity?> GetBySlugAsync(string slug, CancellationToken ct = default)
+    {
+        var response = await _dynamo.QueryAsync(new QueryRequest
+        {
+            TableName              = _table,
+            IndexName              = "GSI2",
+            KeyConditionExpression = "GSI2PK = :slug",
+            ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+            {
+                [":slug"] = new() { S = $"SLUG#{slug}" }
+            },
+            Limit = 1
+        }, ct);
+        if (response.Items.Count == 0) return null;
+        return Map(response.Items[0]);
     }
 
     public async Task<PaginatedResponse<EventEntity>> ListByUserAsync(string userId, int limit, string? cursor, CancellationToken ct = default)
@@ -102,6 +121,8 @@ public class DynamoEventRepository : IEventRepository
         }, ct);
     }
 
+    // ── RSVPs ─────────────────────────────────────────────────────────────────
+
     public async Task SaveRsvpAsync(string eventId, RsvpRequest rsvp, CancellationToken ct = default)
     {
         var rsvpId = Guid.NewGuid().ToString("N");
@@ -118,9 +139,7 @@ public class DynamoEventRepository : IEventRepository
         };
         if (!string.IsNullOrEmpty(rsvp.Message))
             item["message"] = new() { S = rsvp.Message };
-
         await _dynamo.PutItemAsync(new PutItemRequest { TableName = _table, Item = item }, ct);
-        _log.LogInformation("RSVP saved for event {EventId}", eventId);
     }
 
     public async Task<List<RsvpEntity>> ListRsvpsAsync(string eventId, CancellationToken ct = default)
@@ -128,14 +147,13 @@ public class DynamoEventRepository : IEventRepository
         var response = await _dynamo.QueryAsync(new QueryRequest
         {
             TableName              = _table,
-            KeyConditionExpression = "PK = :pk AND begins_with(SK, :rsvpPrefix)",
+            KeyConditionExpression = "PK = :pk AND begins_with(SK, :prefix)",
             ExpressionAttributeValues = new Dictionary<string, AttributeValue>
             {
-                [":pk"]         = new() { S = PK(eventId) },
-                [":rsvpPrefix"] = new() { S = "RSVP#" }
+                [":pk"]     = new() { S = PK(eventId) },
+                [":prefix"] = new() { S = "RSVP#" }
             }
         }, ct);
-
         return response.Items.Select(item => new RsvpEntity
         {
             RsvpId    = item["rsvpId"].S,
@@ -148,12 +166,70 @@ public class DynamoEventRepository : IEventRepository
         }).ToList();
     }
 
+    // ── Contacts ──────────────────────────────────────────────────────────────
+
+    public async Task<List<ContactEntity>> ListContactsAsync(string userId, CancellationToken ct = default)
+    {
+        var response = await _dynamo.QueryAsync(new QueryRequest
+        {
+            TableName              = _table,
+            KeyConditionExpression = "PK = :pk AND begins_with(SK, :prefix)",
+            ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+            {
+                [":pk"]     = new() { S = $"USER#{userId}" },
+                [":prefix"] = new() { S = "CONTACT#" }
+            }
+        }, ct);
+        return response.Items.Select(item => new ContactEntity
+        {
+            ContactId = item.TryGetValue("contactId", out var cid) ? cid.S : "",
+            UserId    = userId,
+            Name      = item.TryGetValue("name",      out var n)   ? n.S   : "",
+            Email     = item.TryGetValue("email",     out var e)   ? e.S   : null,
+            Phone     = item.TryGetValue("phone",     out var p)   ? p.S   : null,
+            CreatedAt = item.TryGetValue("createdAt", out var ca)  ? ca.S  : "",
+        }).ToList();
+    }
+
+    public async Task<ContactEntity> CreateContactAsync(string userId, CreateContactRequest req, CancellationToken ct = default)
+    {
+        var contactId = $"ctc_{Guid.NewGuid():N}";
+        var now       = DateTime.UtcNow.ToString("O");
+        var item      = new Dictionary<string, AttributeValue>
+        {
+            ["PK"]        = new() { S = $"USER#{userId}" },
+            ["SK"]        = new() { S = $"CONTACT#{contactId}" },
+            ["contactId"] = new() { S = contactId },
+            ["name"]      = new() { S = req.Name },
+            ["createdAt"] = new() { S = now },
+        };
+        if (!string.IsNullOrEmpty(req.Email)) item["email"] = new() { S = req.Email };
+        if (!string.IsNullOrEmpty(req.Phone)) item["phone"] = new() { S = req.Phone };
+        await _dynamo.PutItemAsync(new PutItemRequest { TableName = _table, Item = item }, ct);
+        return new ContactEntity { ContactId = contactId, UserId = userId, Name = req.Name, Email = req.Email, Phone = req.Phone, CreatedAt = now };
+    }
+
+    public async Task DeleteContactAsync(string userId, string contactId, CancellationToken ct = default)
+    {
+        await _dynamo.DeleteItemAsync(new DeleteItemRequest
+        {
+            TableName = _table,
+            Key = new Dictionary<string, AttributeValue>
+            {
+                ["PK"] = new() { S = $"USER#{userId}" },
+                ["SK"] = new() { S = $"CONTACT#{contactId}" }
+            }
+        }, ct);
+    }
+
+    // ── Mapping ───────────────────────────────────────────────────────────────
+
     private static EventEntity Map(Dictionary<string, AttributeValue> item) => new()
     {
         PK            = item["PK"].S,
         SK            = item["SK"].S,
-        GSI1PK        = item.TryGetValue("GSI1PK", out var g1)  ? g1.S  : "",
-        GSI1SK        = item.TryGetValue("GSI1SK", out var g2)  ? g2.S  : "",
+        GSI1PK        = item.TryGetValue("GSI1PK",       out var g1)  ? g1.S  : "",
+        GSI1SK        = item.TryGetValue("GSI1SK",       out var g2)  ? g2.S  : "",
         EventId       = item["eventId"].S,
         UserId        = item["userId"].S,
         Title         = item["title"].S,
@@ -170,6 +246,11 @@ public class DynamoEventRepository : IEventRepository
         DesignJson    = item.TryGetValue("designJson",    out var dj)  ? dj.S  : null,
         Tags          = item.TryGetValue("tags",          out var tg)  ? tg.SS : new(),
         RsvpDeadline  = item.TryGetValue("rsvpDeadline",  out var rd)  ? rd.S  : null,
+        Schedule      = item.TryGetValue("schedule",      out var sc)  ? sc.S  : null,
+        OrganizerName  = item.TryGetValue("organizerName",  out var on2) ? on2.S : null,
+        OrganizerPhone = item.TryGetValue("organizerPhone", out var op)  ? op.S  : null,
+        OrganizerEmail = item.TryGetValue("organizerEmail", out var oe)  ? oe.S  : null,
+        GalleryUrl     = item.TryGetValue("galleryUrl",     out var gu)  ? gu.S  : null,
         CreatedAt     = item["createdAt"].S,
         UpdatedAt     = item["updatedAt"].S,
     };
@@ -190,17 +271,25 @@ public class DynamoEventRepository : IEventRepository
             ["createdAt"] = new() { S = e.CreatedAt },
             ["updatedAt"] = new() { S = e.UpdatedAt },
         };
-        if (e.Description   is not null) item["description"]   = new() { S = e.Description };
-        if (e.EndDate        is not null) item["endDate"]       = new() { S = e.EndDate };
-        if (e.Location       is not null) item["location"]      = new() { S = e.Location };
-        if (e.Address        is not null) item["address"]       = new() { S = e.Address };
-        if (e.Capacity       is not null) item["capacity"]      = new() { N = e.Capacity.ToString() };
-        if (e.MicrositeSlug  is not null) item["micrositeSlug"] = new() { S = e.MicrositeSlug };
-        if (e.DesignId       is not null) item["designId"]      = new() { S = e.DesignId };
-        if (e.CoverImageUrl  is not null) item["coverImageUrl"] = new() { S = e.CoverImageUrl };
-        if (e.DesignJson     is not null) item["designJson"]    = new() { S = e.DesignJson };
-        if (e.Tags?.Count    > 0)         item["tags"]          = new() { SS = e.Tags };
-        if (e.RsvpDeadline   is not null) item["rsvpDeadline"]  = new() { S = e.RsvpDeadline };
+        if (e.MicrositeSlug  is not null) {
+            item["micrositeSlug"] = new() { S = e.MicrositeSlug };
+            item["GSI2PK"]        = new() { S = $"SLUG#{e.MicrositeSlug}" };
+        }
+        if (e.Description    is not null) item["description"]   = new() { S = e.Description };
+        if (e.EndDate         is not null) item["endDate"]       = new() { S = e.EndDate };
+        if (e.Location        is not null) item["location"]      = new() { S = e.Location };
+        if (e.Address         is not null) item["address"]       = new() { S = e.Address };
+        if (e.Capacity        is not null) item["capacity"]      = new() { N = e.Capacity.ToString() };
+        if (e.DesignId        is not null) item["designId"]      = new() { S = e.DesignId };
+        if (e.CoverImageUrl   is not null) item["coverImageUrl"] = new() { S = e.CoverImageUrl };
+        if (e.DesignJson      is not null) item["designJson"]    = new() { S = e.DesignJson };
+        if (e.Tags?.Count     > 0)         item["tags"]          = new() { SS = e.Tags };
+        if (e.RsvpDeadline    is not null) item["rsvpDeadline"]  = new() { S = e.RsvpDeadline };
+        if (e.Schedule        is not null) item["schedule"]      = new() { S = e.Schedule };
+        if (e.OrganizerName   is not null) item["organizerName"] = new() { S = e.OrganizerName };
+        if (e.OrganizerPhone  is not null) item["organizerPhone"]= new() { S = e.OrganizerPhone };
+        if (e.OrganizerEmail  is not null) item["organizerEmail"]= new() { S = e.OrganizerEmail };
+        if (e.GalleryUrl      is not null) item["galleryUrl"]    = new() { S = e.GalleryUrl };
         return item;
     }
 }

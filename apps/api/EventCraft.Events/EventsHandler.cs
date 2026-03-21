@@ -3,6 +3,8 @@ using Amazon.Lambda.APIGatewayEvents;
 using Amazon.Lambda.Core;
 using Amazon.S3;
 using Amazon.S3.Model;
+using Amazon.SimpleEmail;
+using Amazon.SimpleEmail.Model;
 using EventCraft.Events.Commands;
 using EventCraft.Events.Models;
 using EventCraft.Events.Queries;
@@ -19,9 +21,9 @@ namespace EventCraft.Events;
 
 public class EventsHandler
 {
-    private static readonly IServiceProvider _services;
-    private static readonly IMediator        _mediator;
-    private static readonly string           _mediaBucket;
+    private static readonly IServiceProvider      _services;
+    private static readonly IMediator             _mediator;
+    private static readonly string                _mediaBucket;
 
     private static readonly JsonSerializerOptions _json = new()
     {
@@ -67,31 +69,42 @@ public class EventsHandler
 
         try
         {
-            if (method == "GET"    && path == "/health")               return Health();
-            if (method == "GET"    && path == "/admin/users")          return await ListUsers(request);
-            if (method == "POST"   && path.StartsWith("/admin/users/") && path.EndsWith("/enable"))  return await EnableUser(request);
-            if (method == "POST"   && path.StartsWith("/admin/users/") && path.EndsWith("/disable")) return await DisableUser(request);
-            if (method == "DELETE" && path.StartsWith("/admin/users/"))                              return await DeleteUser(request);
-            if (method == "GET"    && path == "/events")               return await ListEvents(request);
-            if (method == "POST"   && path == "/events")               return await CreateEvent(request);
+            // Health
+            if (method == "GET" && path == "/health") return Health();
 
-            if (method == "GET"    && path.StartsWith("/events/") && path.EndsWith("/design"))
-                return await GetDesign(request);
-            if (method == "POST"   && path.StartsWith("/events/") && path.EndsWith("/design"))
-                return await SaveDesign(request);
-            if (method == "POST"   && path.StartsWith("/events/") && path.EndsWith("/upload-url"))
-                return await GetUploadUrl(request);
-            if (method == "POST"   && path.StartsWith("/events/") && path.EndsWith("/rsvp"))
-                return await SubmitRsvp(request);
-            if (method == "GET"    && path.StartsWith("/events/") && path.EndsWith("/rsvp"))
-                return await ListRsvps(request);
-            if (method == "GET"    && path.StartsWith("/events/") && path.EndsWith("/public"))
-                return await GetPublicEvent(request);
-            if (method == "GET"    && path.StartsWith("/events/"))     return await GetEvent(request);
-            if (method == "PUT"    && path.StartsWith("/events/") && path.EndsWith("/publish"))
-                return await PublishEvent(request);
-            if (method == "PUT"    && path.StartsWith("/events/"))     return await UpdateEvent(request);
-            if (method == "DELETE" && path.StartsWith("/events/"))     return await DeleteEvent(request);
+            // Admin
+            if (method == "GET"    && path == "/admin/users")                                          return await ListUsers(request);
+            if (method == "POST"   && path.StartsWith("/admin/users/") && path.EndsWith("/enable"))    return await EnableUser(request);
+            if (method == "POST"   && path.StartsWith("/admin/users/") && path.EndsWith("/disable"))   return await DisableUser(request);
+            if (method == "DELETE" && path.StartsWith("/admin/users/"))                                return await DeleteUser(request);
+
+            // Contacts
+            if (method == "GET"    && path == "/contacts")           return await ListContacts(request);
+            if (method == "POST"   && path == "/contacts")           return await CreateContact(request);
+            if (method == "DELETE" && path.StartsWith("/contacts/")) return await DeleteContact(request);
+
+            // Events
+            if (method == "GET"  && path == "/events")  return await ListEvents(request);
+            if (method == "POST" && path == "/events")  return await CreateEvent(request);
+
+            // Slug-based public lookup (before /events/{id} routes)
+            if (method == "GET" && path.StartsWith("/events/slug/") && path.EndsWith("/public"))
+                return await GetPublicEventBySlug(request);
+
+            // Event sub-routes
+            if (method == "GET"  && path.StartsWith("/events/") && path.EndsWith("/design"))        return await GetDesign(request);
+            if (method == "POST" && path.StartsWith("/events/") && path.EndsWith("/design"))        return await SaveDesign(request);
+            if (method == "POST" && path.StartsWith("/events/") && path.EndsWith("/upload-url"))    return await GetUploadUrl(request);
+            if (method == "POST" && path.StartsWith("/events/") && path.EndsWith("/rsvp"))          return await SubmitRsvp(request);
+            if (method == "GET"  && path.StartsWith("/events/") && path.EndsWith("/rsvp"))          return await ListRsvps(request);
+            if (method == "GET"  && path.StartsWith("/events/") && path.EndsWith("/public"))        return await GetPublicEvent(request);
+            if (method == "POST" && path.StartsWith("/events/") && path.EndsWith("/invite/email"))  return await SendEmailInvites(request);
+
+            // Event CRUD
+            if (method == "GET"    && path.StartsWith("/events/")) return await GetEvent(request);
+            if (method == "PUT"    && path.StartsWith("/events/") && path.EndsWith("/publish"))     return await PublishEvent(request);
+            if (method == "PUT"    && path.StartsWith("/events/")) return await UpdateEvent(request);
+            if (method == "DELETE" && path.StartsWith("/events/")) return await DeleteEvent(request);
 
             return NotFoundResponse();
         }
@@ -102,10 +115,91 @@ public class EventsHandler
         }
     }
 
-    // ── Handlers ──────────────────────────────────────────────────────────────
+    // ── Health ────────────────────────────────────────────────────────────────
 
     private static APIGatewayProxyResponse Health()
         => OkResponse(new { status = "ok", service = "eventcraft-events", timestamp = DateTime.UtcNow.ToString("O") });
+
+    // ── Contacts ──────────────────────────────────────────────────────────────
+
+    private async Task<APIGatewayProxyResponse> ListContacts(APIGatewayProxyRequest req)
+    {
+        var userId = GetUserId(req);
+        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+        var repo     = _services.GetRequiredService<IEventRepository>();
+        var contacts = await repo.ListContactsAsync(userId);
+        return OkResponse(ApiResponse<object>.Ok(contacts));
+    }
+
+    private async Task<APIGatewayProxyResponse> CreateContact(APIGatewayProxyRequest req)
+    {
+        var userId = GetUserId(req);
+        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+        var body = Deserialize<CreateContactRequest>(req.Body);
+        if (body is null || string.IsNullOrWhiteSpace(body.Name))
+            return ErrorResponse(400, "BAD_REQUEST", "Name is required");
+        var repo    = _services.GetRequiredService<IEventRepository>();
+        var contact = await repo.CreateContactAsync(userId, body);
+        return OkResponse(ApiResponse<object>.Ok(contact), 201);
+    }
+
+    private async Task<APIGatewayProxyResponse> DeleteContact(APIGatewayProxyRequest req)
+    {
+        var userId    = GetUserId(req);
+        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+        var contactId = GetSegment(req.Path, 1);
+        var repo      = _services.GetRequiredService<IEventRepository>();
+        await repo.DeleteContactAsync(userId, contactId);
+        return new APIGatewayProxyResponse { StatusCode = 204, Headers = CorsHeaders() };
+    }
+
+    // ── Email invites ─────────────────────────────────────────────────────────
+
+    private async Task<APIGatewayProxyResponse> SendEmailInvites(APIGatewayProxyRequest req)
+    {
+        var userId = GetUserId(req);
+        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+        var eventId = GetSegment(req.Path, 1);
+        var body    = Deserialize<SendInviteRequest>(req.Body);
+        if (body is null) return ErrorResponse(400, "BAD_REQUEST", "Invalid request body");
+
+        var repo     = _services.GetRequiredService<IEventRepository>();
+        var ev       = await repo.GetByIdAsync(eventId);
+        if (ev is null || ev.UserId != userId) return NotFoundResponse();
+
+        var contacts = await repo.ListContactsAsync(userId);
+        var targets  = contacts.Where(c => body.ContactIds.Contains(c.ContactId) && !string.IsNullOrEmpty(c.Email)).ToList();
+
+        var ses      = new AmazonSimpleEmailServiceClient(Amazon.RegionEndpoint.USEast1);
+        var appUrl   = Environment.GetEnvironmentVariable("APP_URL") ?? "https://eventcraft.irotte.com";
+        var rsvpUrl  = ev.MicrositeSlug != null ? $"{appUrl}/e/{ev.MicrositeSlug}" : $"{appUrl}/rsvp/{eventId}";
+
+        var formattedDate = DateTime.TryParse(ev.EventDate, out var dt)
+            ? dt.ToString("dddd, MMMM d, yyyy")
+            : ev.EventDate;
+
+        var sent = new List<string>();
+        foreach (var contact in targets)
+        {
+            var html = BuildEmailHtml(contact.Name, ev.Title, formattedDate, ev.Location ?? "", rsvpUrl);
+            try {
+                await ses.SendEmailAsync(new SendEmailRequest {
+                    Source      = "noreply@pragmaticconsulting.net",
+                    Destination = new Destination { ToAddresses = new List<string> { contact.Email! } },
+                    Message     = new Message {
+                        Subject = new Content($"You're invited: {ev.Title}"),
+                        Body    = new Body { Html = new Content(html) }
+                    }
+                });
+                sent.Add(contact.Email!);
+            } catch (Exception ex) {
+                context_log($"Failed to send to {contact.Email}: {ex.Message}");
+            }
+        }
+        return OkResponse(ApiResponse<object>.Ok(new { sent, total = targets.Count }));
+    }
+
+    // ── Events ────────────────────────────────────────────────────────────────
 
     private async Task<APIGatewayProxyResponse> CreateEvent(APIGatewayProxyRequest req)
     {
@@ -136,16 +230,36 @@ public class EventsHandler
         var repo    = _services.GetRequiredService<IEventRepository>();
         var entity  = await repo.GetByIdAsync(eventId);
         if (entity is null) return NotFoundResponse();
-        return OkResponse(ApiResponse<object>.Ok(new {
-            eventId     = entity.EventId,
-            title       = entity.Title,
-            eventDate   = entity.EventDate,
-            location    = entity.Location,
-            description = entity.Description,
-            canvasJson  = entity.DesignJson,
-            status      = entity.Status,
-        }));
+        return OkResponse(ApiResponse<object>.Ok(BuildPublicPayload(entity)));
     }
+
+    private async Task<APIGatewayProxyResponse> GetPublicEventBySlug(APIGatewayProxyRequest req)
+    {
+        // path: /events/slug/{slug}/public
+        var parts  = req.Path.Trim('/').Split('/');
+        var slug   = parts.Length >= 3 ? parts[2] : "";
+        var repo   = _services.GetRequiredService<IEventRepository>();
+        var entity = await repo.GetBySlugAsync(slug);
+        if (entity is null) return NotFoundResponse();
+        return OkResponse(ApiResponse<object>.Ok(BuildPublicPayload(entity)));
+    }
+
+    private static object BuildPublicPayload(EventEntity e) => new
+    {
+        eventId        = e.EventId,
+        title          = e.Title,
+        eventDate      = e.EventDate,
+        location       = e.Location,
+        description    = e.Description,
+        canvasJson     = e.DesignJson,
+        status         = e.Status,
+        micrositeSlug  = e.MicrositeSlug,
+        schedule       = e.Schedule,
+        organizerName  = e.OrganizerName,
+        organizerPhone = e.OrganizerPhone,
+        organizerEmail = e.OrganizerEmail,
+        galleryUrl     = e.GalleryUrl,
+    };
 
     private async Task<APIGatewayProxyResponse> ListEvents(APIGatewayProxyRequest req)
     {
@@ -226,9 +340,9 @@ public class EventsHandler
         var eventId = GetSegment(req.Path, 1);
         var body    = Deserialize<UploadUrlRequest>(req.Body);
         if (body is null) return ErrorResponse(400, "BAD_REQUEST", "Invalid request body");
-        var s3     = _services.GetRequiredService<IAmazonS3>();
-        var key    = $"uploads/{userId}/{eventId}/{Guid.NewGuid()}-{body.FileName}";
-        var urlReq = new GetPreSignedUrlRequest
+        var s3      = _services.GetRequiredService<IAmazonS3>();
+        var key     = $"uploads/{userId}/{eventId}/{Guid.NewGuid()}-{body.FileName}";
+        var urlReq  = new GetPreSignedUrlRequest
         {
             BucketName  = _mediaBucket,
             Key         = key,
@@ -261,7 +375,7 @@ public class EventsHandler
         return OkResponse(ApiResponse<object>.Ok(rsvps));
     }
 
-    // ── Admin handlers ────────────────────────────────────────────────────────
+    // ── Admin ─────────────────────────────────────────────────────────────────
 
     private async Task<APIGatewayProxyResponse> ListUsers(APIGatewayProxyRequest req)
     {
@@ -270,28 +384,17 @@ public class EventsHandler
         var claims = req.RequestContext?.Authorizer?.Claims;
         var groups = claims != null && claims.ContainsKey("cognito:groups") ? claims["cognito:groups"] : "";
         if (!groups.Contains("admin")) return ErrorResponse(403, "FORBIDDEN", "Admin only");
-        var cognito = new Amazon.CognitoIdentityProvider.AmazonCognitoIdentityProviderClient();
-        var userPoolId = System.Environment.GetEnvironmentVariable("COGNITO_USER_POOL_ID") ?? "";
-        var users = new System.Collections.Generic.List<object>();
+        var cognito    = new Amazon.CognitoIdentityProvider.AmazonCognitoIdentityProviderClient();
+        var userPoolId = Environment.GetEnvironmentVariable("COGNITO_USER_POOL_ID") ?? "";
+        var users      = new List<object>();
         string? paginationToken = null;
         do {
             var listReq = new Amazon.CognitoIdentityProvider.Model.ListUsersRequest
-            {
-                UserPoolId = userPoolId,
-                Limit = 60,
-                PaginationToken = paginationToken
-            };
+                { UserPoolId = userPoolId, Limit = 60, PaginationToken = paginationToken };
             var resp = await cognito.ListUsersAsync(listReq);
             foreach (var u in resp.Users) {
                 var email = u.Attributes.Find(a => a.Name == "email")?.Value ?? "";
-                users.Add(new {
-                    username = u.Username,
-                    email,
-                    status   = u.UserStatus.Value,
-                    enabled  = u.Enabled,
-                    created  = u.UserCreateDate,
-                    modified = u.UserLastModifiedDate
-                });
+                users.Add(new { username = u.Username, email, status = u.UserStatus.Value, enabled = u.Enabled, created = u.UserCreateDate, modified = u.UserLastModifiedDate });
             }
             paginationToken = resp.PaginationToken;
         } while (paginationToken != null);
@@ -300,50 +403,74 @@ public class EventsHandler
 
     private async Task<APIGatewayProxyResponse> EnableUser(APIGatewayProxyRequest req)
     {
-        var userId = GetUserId(req);
-        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
-        var username = GetSegment(req.Path, 2);
-        var cognito = new Amazon.CognitoIdentityProvider.AmazonCognitoIdentityProviderClient();
-        var userPoolId = System.Environment.GetEnvironmentVariable("COGNITO_USER_POOL_ID") ?? "";
-        await cognito.AdminEnableUserAsync(new Amazon.CognitoIdentityProvider.Model.AdminEnableUserRequest
-        {
-            UserPoolId = userPoolId,
-            Username = username
-        });
+        var userId = GetUserId(req); if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+        var username   = GetSegment(req.Path, 2);
+        var cognito    = new Amazon.CognitoIdentityProvider.AmazonCognitoIdentityProviderClient();
+        var userPoolId = Environment.GetEnvironmentVariable("COGNITO_USER_POOL_ID") ?? "";
+        await cognito.AdminEnableUserAsync(new Amazon.CognitoIdentityProvider.Model.AdminEnableUserRequest { UserPoolId = userPoolId, Username = username });
         return OkResponse(ApiResponse<object>.Ok(new { success = true }));
     }
 
     private async Task<APIGatewayProxyResponse> DisableUser(APIGatewayProxyRequest req)
     {
-        var userId = GetUserId(req);
-        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
-        var username = GetSegment(req.Path, 2);
-        var cognito = new Amazon.CognitoIdentityProvider.AmazonCognitoIdentityProviderClient();
-        var userPoolId = System.Environment.GetEnvironmentVariable("COGNITO_USER_POOL_ID") ?? "";
-        await cognito.AdminDisableUserAsync(new Amazon.CognitoIdentityProvider.Model.AdminDisableUserRequest
-        {
-            UserPoolId = userPoolId,
-            Username = username
-        });
+        var userId = GetUserId(req); if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+        var username   = GetSegment(req.Path, 2);
+        var cognito    = new Amazon.CognitoIdentityProvider.AmazonCognitoIdentityProviderClient();
+        var userPoolId = Environment.GetEnvironmentVariable("COGNITO_USER_POOL_ID") ?? "";
+        await cognito.AdminDisableUserAsync(new Amazon.CognitoIdentityProvider.Model.AdminDisableUserRequest { UserPoolId = userPoolId, Username = username });
         return OkResponse(ApiResponse<object>.Ok(new { success = true }));
     }
 
     private async Task<APIGatewayProxyResponse> DeleteUser(APIGatewayProxyRequest req)
     {
-        var userId = GetUserId(req);
-        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
-        var username = GetSegment(req.Path, 2);
-        var cognito = new Amazon.CognitoIdentityProvider.AmazonCognitoIdentityProviderClient();
-        var userPoolId = System.Environment.GetEnvironmentVariable("COGNITO_USER_POOL_ID") ?? "";
-        await cognito.AdminDeleteUserAsync(new Amazon.CognitoIdentityProvider.Model.AdminDeleteUserRequest
-        {
-            UserPoolId = userPoolId,
-            Username = username
-        });
+        var userId = GetUserId(req); if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+        var username   = GetSegment(req.Path, 2);
+        var cognito    = new Amazon.CognitoIdentityProvider.AmazonCognitoIdentityProviderClient();
+        var userPoolId = Environment.GetEnvironmentVariable("COGNITO_USER_POOL_ID") ?? "";
+        await cognito.AdminDeleteUserAsync(new Amazon.CognitoIdentityProvider.Model.AdminDeleteUserRequest { UserPoolId = userPoolId, Username = username });
         return OkResponse(ApiResponse<object>.Ok(new { success = true }));
     }
 
-    // ── Response helpers ──────────────────────────────────────────────────────
+    // ── Email template ────────────────────────────────────────────────────────
+
+    private static string BuildEmailHtml(string name, string title, string date, string location, string rsvpUrl) => $@"
+<!DOCTYPE html><html><head><meta charset='utf-8'>
+<style>
+  body{{font-family:Georgia,serif;background:#f5f0e8;margin:0;padding:20px}}
+  .card{{max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)}}
+  .header{{background:#0F0A2E;padding:32px;text-align:center}}
+  .logo{{color:#D4AF37;font-size:22px;font-weight:700;letter-spacing:1px}}
+  .body{{padding:40px 36px}}
+  .title{{font-size:28px;font-weight:700;color:#1a1a2e;margin-bottom:20px;line-height:1.3}}
+  .detail{{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}}
+  .icon{{font-size:16px;margin-top:2px}}
+  .text{{font-size:15px;color:#444;line-height:1.5}}
+  hr{{border:none;border-top:1px solid #e8e5dc;margin:28px 0}}
+  .cta{{display:block;text-align:center;background:#4F6FBF;color:#fff;text-decoration:none;padding:16px 32px;border-radius:8px;font-size:16px;font-weight:600}}
+  .footer{{background:#f5f0e8;padding:20px 36px;text-align:center;font-size:12px;color:#999}}
+</style></head><body>
+<div class='card'>
+  <div class='header'><div class='logo'>EventCraft</div></div>
+  <div class='body'>
+    <p style='font-size:16px;color:#555;margin-bottom:24px'>Dear {name},</p>
+    <p class='title'>{title}</p>
+    <div class='detail'><span class='icon'>📅</span><span class='text'>{date}</span></div>
+    {(string.IsNullOrEmpty(location) ? "" : $"<div class='detail'><span class='icon'>📍</span><span class='text'>{location}</span></div>")}
+    <hr/>
+    <p style='font-size:15px;color:#555;margin-bottom:24px;line-height:1.6'>
+      You have been cordially invited to this special occasion. Please RSVP by clicking the button below.
+    </p>
+    <a href='{rsvpUrl}' class='cta'>RSVP Now</a>
+  </div>
+  <div class='footer'>
+    <p>Powered by EventCraft · eventcraft.irotte.com</p>
+    <p style='margin-top:4px'>If you did not expect this invitation, you may ignore this email.</p>
+  </div>
+</div></body></html>";
+
+    private static void context_log(string msg) => Console.WriteLine(msg);
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static APIGatewayProxyResponse OkResponse(object data, int statusCode = 200)
         => new() { StatusCode = statusCode, Headers = CorsHeaders(), Body = JsonSerializer.Serialize(data, _json) };
@@ -364,16 +491,14 @@ public class EventsHandler
 
     private static string? GetUserId(APIGatewayProxyRequest req)
     {
-        try
-        {
+        try {
             if (req.RequestContext?.Authorizer == null) return null;
             if (req.RequestContext.Authorizer.TryGetValue("claims", out var claims) &&
                 claims is System.Text.Json.JsonElement el &&
                 el.TryGetProperty("sub", out var sub))
                 return sub.GetString();
             return null;
-        }
-        catch { return null; }
+        } catch { return null; }
     }
 
     private static string GetSegment(string path, int index)
