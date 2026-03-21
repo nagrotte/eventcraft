@@ -78,9 +78,8 @@ export function TemplatesPanel({ fabricRef, eventTitle, eventDate, eventLocation
       const { FabricImage, IText, Rect } = await import('fabric');
 
       // Resize canvas if template has different dimensions
-      if (t.canvasWidth !== canvas.width || t.canvasHeight !== canvas.height) {
-        canvas.setWidth(t.canvasWidth);
-        canvas.setHeight(t.canvasHeight);
+      if (t.canvasWidth !== (canvas as any).width || t.canvasHeight !== (canvas as any).height) {
+        (canvas as any).setDimensions({ width: t.canvasWidth, height: t.canvasHeight });
       }
 
       canvas.clear();
