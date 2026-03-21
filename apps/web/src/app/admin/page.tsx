@@ -79,7 +79,7 @@ export default function AdminPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--ec-bg)' }}>
-      <EcNav email={user?.email} isAdmin={isAdmin} onLogout={logout} breadcrumbs={[{ label: 'Admin' }]} />
+      <EcNav email={user?.email} isAdmin={isAdmin} onLogout={logout} breadcrumbs={[{ label: 'Admin', href: '/admin' }, { label: 'Users' }]} />
       <main className="ec-page">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
           <div>
