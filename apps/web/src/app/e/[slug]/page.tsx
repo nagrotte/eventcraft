@@ -1,3 +1,4 @@
+import { LogoMark } from '@/components/ui/LogoMark';
 'use client';
 
 import { useParams } from 'next/navigation';
@@ -145,21 +146,9 @@ export default function MicrositePage() {
       {/* Main content */}
       <div style={{ maxWidth: 680, margin: '0 auto', padding: '40px 20px' }}>
 
-        {/* EventCraft badge */}
+        {/* EventCraft logo */}
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 32 }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 16px', background: 'rgba(79,111,191,0.1)', border: '1px solid rgba(79,111,191,0.25)', borderRadius: 20 }}>
-            <svg width="16" height="16" viewBox="0 0 32 32" fill="none">
-              <rect width="32" height="32" rx="7" fill="#0F0A2E"/>
-              <g transform="translate(16,17)">
-                <ellipse cx="0" cy="-8" rx="3" ry="7" fill="#4F6FBF" opacity="0.9"/>
-                <ellipse cx="6" cy="-4" rx="2.5" ry="6" fill="#4F6FBF" opacity="0.7" transform="rotate(38 6 -4)"/>
-                <ellipse cx="-6" cy="-4" rx="2.5" ry="6" fill="#4F6FBF" opacity="0.7" transform="rotate(-38 -6 -4)"/>
-                <circle cx="0" cy="-4" r="3" fill="#0F0A2E"/>
-                <circle cx="0" cy="-4" r="1.8" fill="#D4AF37"/>
-              </g>
-            </svg>
-            <span style={{ fontSize: 12, color: '#4F6FBF', fontWeight: 600, letterSpacing: '0.5px' }}>EventCraft</span>
-          </div>
+          <LogoMark size={28} onClick={() => window.location.href='https://eventcraft.irotte.com'} />
         </div>
 
         {/* Event title */}
