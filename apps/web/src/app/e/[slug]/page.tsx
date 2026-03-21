@@ -46,7 +46,7 @@ export default function MicrositePage() {
       try {
         const res  = await fetch(`${apiBase}/events/slug/${slug}/public`);
         const data = await res.json();
-        if (data.data) setEvent(data.data);
+        if (data.data) { const d = data.data; if (typeof d.schedule === 'string') { try { d.schedule = JSON.parse(d.schedule); } catch { d.schedule = []; } } setEvent(d); }
         else setError('Event not found');
       } catch {
         setError('Event not found');
@@ -91,7 +91,7 @@ export default function MicrositePage() {
       });
       if (!res.ok) throw new Error();
       setStep('done');
-    } catch { setError('Failed to submit — please try again'); }
+    } catch { setError('Failed to submit â€” please try again'); }
     finally { setSubmitting(false); }
   }
 
@@ -133,7 +133,7 @@ export default function MicrositePage() {
         ::selection { background: rgba(79,111,191,0.3); }
       `}</style>
 
-      {/* Hero — canvas design */}
+      {/* Hero â€” canvas design */}
       {event.canvasJson && (
         <div style={{ width: '100%', overflow: 'hidden', display: 'flex', justifyContent: 'center', background: '#04040a' }}>
           <div style={{ width: 600, height: 850, transformOrigin: 'top left', transform: `scale(${canvasScale})`, marginBottom: -(850 * (1 - canvasScale)) }}>
@@ -197,7 +197,7 @@ export default function MicrositePage() {
                   <p style={{ fontSize: 15, color: '#fff', fontWeight: 500 }}>{event.location}</p>
                   <a href={`https://maps.google.com/?q=${encodeURIComponent(event.location)}`} target="_blank" rel="noreferrer"
                     style={{ fontSize: 12, color: '#4F6FBF', textDecoration: 'none', marginTop: 2, display: 'inline-block' }}>
-                    Get directions →
+                    Get directions â†’
                   </a>
                 </div>
               </div>
@@ -243,7 +243,7 @@ export default function MicrositePage() {
         {event.galleryUrl && (
           <div style={{ background: 'rgba(212,175,55,0.05)', border: '1px solid rgba(212,175,55,0.15)', borderRadius: 16, padding: '20px 28px', marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
             <div>
-              <p style={{ fontSize: 14, fontWeight: 600, color: '#D4AF37', marginBottom: 4 }}>📸 Event Photos</p>
+              <p style={{ fontSize: 14, fontWeight: 600, color: '#D4AF37', marginBottom: 4 }}>ðŸ“¸ Event Photos</p>
               <p style={{ fontSize: 13, color: '#888' }}>View and download photos from this event</p>
             </div>
             <a href={event.galleryUrl} target="_blank" rel="noreferrer"
@@ -294,7 +294,7 @@ export default function MicrositePage() {
 
           {step === 'done' && (
             <div style={{ textAlign: 'center', padding: '16px 0' }}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>{response === 'yes' ? '🎉' : response === 'no' ? '😔' : '🤔'}</div>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>{response === 'yes' ? 'ðŸŽ‰' : response === 'no' ? 'ðŸ˜”' : 'ðŸ¤”'}</div>
               <p style={{ fontSize: 18, fontWeight: 700, color: '#fff', marginBottom: 6 }}>
                 {response === 'yes' ? 'See you there!' : response === 'no' ? "Sorry you can't make it" : "We'll keep a spot for you"}
               </p>
@@ -308,9 +308,9 @@ export default function MicrositePage() {
           <p style={{ fontSize: 13, color: '#666', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: 'Helvetica Neue, sans-serif' }}>Share this event</p>
           <div style={{ display: 'flex', gap: 10 }}>
             <button onClick={copyLink} style={{ flex: 1, padding: '10px 0', background: copied ? 'rgba(79,111,191,0.2)' : 'rgba(255,255,255,0.06)', border: `1px solid ${copied ? 'rgba(79,111,191,0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 8, color: copied ? '#7B9FD4' : '#aaa', cursor: 'pointer', fontSize: 13, fontFamily: 'Helvetica Neue, sans-serif', transition: 'all 0.2s' }}>
-              {copied ? '✓ Copied' : 'Copy Link'}
+              {copied ? 'âœ“ Copied' : 'Copy Link'}
             </button>
-            <button onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`${event.title} — ${appUrl}/e/${slug}`)}`, '_blank')}
+            <button onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`${event.title} â€” ${appUrl}/e/${slug}`)}`, '_blank')}
               style={{ flex: 1, padding: '10px 0', background: 'rgba(37,211,102,0.08)', border: '1px solid rgba(37,211,102,0.2)', borderRadius: 8, color: '#25d366', cursor: 'pointer', fontSize: 13, fontFamily: 'Helvetica Neue, sans-serif' }}>
               WhatsApp
             </button>
@@ -318,7 +318,7 @@ export default function MicrositePage() {
         </div>
 
         <p style={{ textAlign: 'center', fontSize: 11, color: 'rgba(255,255,255,0.15)', fontFamily: 'Helvetica Neue, sans-serif' }}>
-          Powered by EventCraft · eventcraft.irotte.com
+          Powered by EventCraft Â· eventcraft.irotte.com
         </p>
       </div>
     </div>
