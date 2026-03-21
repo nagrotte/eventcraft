@@ -17,20 +17,20 @@ export function EcNav({ email, onLogout, breadcrumbs }: EcNavProps) {
     <nav className="ec-nav">
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-          <div className="ec-logo-mark" style={{ width: 28, height: 28, flexShrink: 0 }}>
-            <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <g transform="translate(16, 17)">
-                <ellipse cx="0"   cy="-10" rx="4"   ry="9"   fill="#6366F1" opacity="0.9"/>
-                <ellipse cx="8"   cy="-6"  rx="3.5" ry="7.5" fill="#6366F1" opacity="0.7" transform="rotate(35 8 -6)"/>
-                <ellipse cx="-8"  cy="-6"  rx="3.5" ry="7.5" fill="#6366F1" opacity="0.7" transform="rotate(-35 -8 -6)"/>
-                <ellipse cx="12"  cy="1"   rx="3"   ry="6"   fill="#818CF8" opacity="0.35" transform="rotate(60 12 1)"/>
-                <ellipse cx="-12" cy="1"   rx="3"   ry="6"   fill="#818CF8" opacity="0.35" transform="rotate(-60 -12 1)"/>
-                <ellipse cx="0"   cy="-6"  rx="2.5" ry="5.5" fill="#D4AF37" opacity="0.95"/>
-                <ellipse cx="5"   cy="-4"  rx="2"   ry="5"   fill="#D4AF37" opacity="0.8" transform="rotate(30 5 -4)"/>
-                <ellipse cx="-5"  cy="-4"  rx="2"   ry="5"   fill="#D4AF37" opacity="0.8" transform="rotate(-30 -5 -4)"/>
-                <circle cx="0" cy="-6" r="3"   fill="#0F0A2E"/>
-                <circle cx="0" cy="-6" r="1.8" fill="#D4AF37"/>
-                <line x1="0" y1="2" x2="0" y2="8" stroke="#6366F1" strokeWidth="1.2" strokeLinecap="round" opacity="0.7"/>
+          <div style={{ width: 32, height: 32, flexShrink: 0 }}>
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect width="32" height="32" rx="7" fill="#0F0A2E"/>
+              <g transform="translate(16,18)">
+                <ellipse cx="0"   cy="-11" rx="3.5" ry="9"   fill="#4F6FBF" opacity="0.85"/>
+                <ellipse cx="9"   cy="-6"  rx="3.5" ry="8.5" fill="#4F6FBF" opacity="0.7"  transform="rotate(38 9 -6)"/>
+                <ellipse cx="-9"  cy="-6"  rx="3.5" ry="8.5" fill="#4F6FBF" opacity="0.7"  transform="rotate(-38 -9 -6)"/>
+                <ellipse cx="13"  cy="1"   rx="3"   ry="7"   fill="#7B9FD4" opacity="0.45" transform="rotate(65 13 1)"/>
+                <ellipse cx="-13" cy="1"   rx="3"   ry="7"   fill="#7B9FD4" opacity="0.45" transform="rotate(-65 -13 1)"/>
+                <circle cx="0" cy="-5" r="4.5" fill="#0F0A2E"/>
+                <circle cx="0" cy="-5" r="2.8" fill="#D4AF37"/>
+                <circle cx="0" cy="-5" r="1.2" fill="#0F0A2E"/>
+                <line x1="0" y1="0" x2="0" y2="9" stroke="#4F6FBF" strokeWidth="1.5" strokeLinecap="round"/>
+                <line x1="-6" y1="9" x2="6" y2="9" stroke="#4F6FBF" strokeWidth="1" strokeLinecap="round" opacity="0.5"/>
               </g>
             </svg>
           </div>
