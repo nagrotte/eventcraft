@@ -10,7 +10,7 @@ import { CanvasShell }   from '@/components/canvas/CanvasShell';
 import { DesignWizard }  from '@/components/canvas/DesignWizard';
 
 function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState<boolean | null>(null);
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
     check();
@@ -58,6 +58,13 @@ export default function DesignPage() {
   }
 
   if (loading) return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--ec-bg)' }}>
+      <div className="ec-spinner" />
+    </div>
+  );
+
+  // Still detecting screen size — show spinner
+  if (isMobile === null) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--ec-bg)' }}>
       <div className="ec-spinner" />
     </div>
