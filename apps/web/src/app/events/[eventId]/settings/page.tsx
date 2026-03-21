@@ -17,17 +17,25 @@ export default function EventSettingsPage() {
   const { data: event, refetch }   = useEvent(eventId);
   const router                     = useRouter();
 
+  // ── Event details (editable) ──────────────────────────────────────────────
+  const [title,         setTitle]         = useState('');
+  const [eventDate,     setEventDate]     = useState('');
+  const [location,      setLocation]      = useState('');
+  const [description,   setDescription]   = useState('');
+
+  // ── Microsite / organizer / schedule / gallery ────────────────────────────
   const [slug,          setSlug]          = useState('');
   const [organizerName, setOrganizerName] = useState('');
   const [organizerPhone,setOrganizerPhone]= useState('');
   const [organizerEmail,setOrganizerEmail]= useState('');
   const [galleryUrl,    setGalleryUrl]    = useState('');
   const [schedule,      setSchedule]      = useState<ScheduleItem[]>([]);
-  const [saving,        setSaving]        = useState(false);
-  const [saved,         setSaved]         = useState(false);
-  const [error,         setError]         = useState('');
-  const [publishing,    setPublishing]    = useState(false);
-  const [slugError,     setSlugError]     = useState('');
+
+  const [saving,      setSaving]      = useState(false);
+  const [saved,       setSaved]       = useState(false);
+  const [error,       setError]       = useState('');
+  const [publishing,  setPublishing]  = useState(false);
+  const [slugError,   setSlugError]   = useState('');
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://eventcraft.irotte.com';
 
@@ -37,6 +45,18 @@ export default function EventSettingsPage() {
 
   useEffect(() => {
     if (!event) return;
+    setTitle(event.title ?? '');
+    // Convert ISO date to datetime-local format (YYYY-MM-DDTHH:MM)
+    if (event.eventDate) {
+      try {
+        const d = new Date(event.eventDate);
+        const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+          .toISOString().slice(0, 16);
+        setEventDate(local);
+      } catch { setEventDate(event.eventDate); }
+    }
+    setLocation(event.location ?? '');
+    setDescription(event.description ?? '');
     setSlug(event.micrositeSlug ?? '');
     setOrganizerName(event.organizerName ?? '');
     setOrganizerPhone(event.organizerPhone ?? '');
@@ -47,8 +67,8 @@ export default function EventSettingsPage() {
     } catch { setSchedule([]); }
   }, [event]);
 
-  function suggestSlug(title: string) {
-    return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 50);
+  function suggestSlug(t: string) {
+    return t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 50);
   }
 
   function validateSlug(val: string) {
@@ -71,11 +91,15 @@ export default function EventSettingsPage() {
   }
 
   async function save() {
+    if (!title.trim()) { setError('Event title is required'); return; }
+    if (!eventDate)    { setError('Event date is required'); return; }
     setSaving(true); setError(''); setSaved(false);
     try {
       await apiClient.put(`/events/${eventId}`, {
-        title:          event?.title,
-        eventDate:      event?.eventDate,
+        title:          title.trim(),
+        eventDate:      new Date(eventDate).toISOString(),
+        location:       location || undefined,
+        description:    description || undefined,
         micrositeSlug:  slug || undefined,
         organizerName:  organizerName || undefined,
         organizerPhone: organizerPhone || undefined,
@@ -83,6 +107,7 @@ export default function EventSettingsPage() {
         galleryUrl:     galleryUrl || undefined,
         schedule:       schedule.length > 0 ? JSON.stringify(schedule) : undefined,
       });
+      await refetch();
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch { setError('Failed to save'); }
@@ -95,6 +120,7 @@ export default function EventSettingsPage() {
     try {
       await save();
       await apiClient.put(`/events/${eventId}/publish`, { micrositeSlug: slug });
+      await refetch();
     } catch { setError('Failed to publish'); }
     finally { setPublishing(false); }
   }
@@ -139,7 +165,7 @@ export default function EventSettingsPage() {
             <p style={{ fontSize: 13, color: 'var(--ec-text-3)' }}>{event?.title}</p>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {saved && <span style={{ fontSize: 12, color: 'var(--ec-success)' }}>✓ Saved</span>}
+            {saved && <span style={{ fontSize: 12, color: 'var(--ec-success)' }}>&#10003; Saved</span>}
             <EcButton variant="ghost" size="sm" loading={saving} onClick={save}>Save</EcButton>
             <EcButton size="sm" loading={publishing} onClick={publish}>
               {isPublished ? 'Update & Publish' : 'Publish Microsite'}
@@ -149,7 +175,52 @@ export default function EventSettingsPage() {
 
         {error && <div className="ec-error" style={{ marginBottom: 16 }}>{error}</div>}
 
-        {/* Microsite slug */}
+        {/* ── Event Details ─────────────────────────────────────────────────── */}
+        <div style={sectionStyle}>
+          <span style={labelStyle}>Event Details</span>
+          <p style={{ fontSize: 12, color: 'var(--ec-text-3)', marginBottom: 16, lineHeight: 1.5 }}>
+            Update your event name, date, and location at any time. Changes are reflected on the microsite immediately after saving.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <EcInput
+              label="Event title *"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              placeholder="Srirama Navami Celebration"
+            />
+            <EcInput
+              label="Date & time *"
+              type="datetime-local"
+              value={eventDate}
+              onChange={e => setEventDate(e.target.value)}
+            />
+            <EcInput
+              label="Location"
+              value={location}
+              onChange={e => setLocation(e.target.value)}
+              placeholder="1204 Rosewood Lane, Katy TX 77494"
+            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--ec-text-2)' }}>
+                Description
+              </label>
+              <textarea
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                placeholder="A brief description shown on the microsite..."
+                rows={3}
+                style={{
+                  width: '100%', padding: '9px 12px', borderRadius: 'var(--ec-radius-sm)',
+                  background: 'var(--ec-card)', border: '1px solid var(--ec-border)',
+                  color: 'var(--ec-text-1)', fontSize: 13, fontFamily: 'inherit',
+                  resize: 'vertical', outline: 'none', boxSizing: 'border-box',
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* ── Microsite URL ─────────────────────────────────────────────────── */}
         <div style={sectionStyle}>
           <span style={labelStyle}>Microsite URL</span>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
@@ -163,7 +234,7 @@ export default function EventSettingsPage() {
                 placeholder="your-event-slug"
               />
             </div>
-            <EcButton size="sm" variant="ghost" onClick={() => setSlug(suggestSlug(event?.title ?? ''))}>
+            <EcButton size="sm" variant="ghost" onClick={() => setSlug(suggestSlug(title || event?.title || ''))}>
               Auto
             </EcButton>
           </div>
@@ -182,22 +253,21 @@ export default function EventSettingsPage() {
               {isPublished && (
                 <a href={`/e/${slug}`} target="_blank" rel="noreferrer"
                   style={{ fontSize: 11, color: 'var(--ec-brand)', textDecoration: 'none' }}>
-                  Preview →
+                  Preview &#8594;
                 </a>
               )}
             </div>
           )}
           <p style={{ fontSize: 11, color: 'var(--ec-text-3)', marginTop: 8, lineHeight: 1.5 }}>
-            This is the public URL for your event microsite. Share this on WhatsApp, email, and QR codes.
-            Only lowercase letters, numbers and hyphens allowed.
+            Only lowercase letters, numbers and hyphens. Share this on WhatsApp, email, and QR codes.
           </p>
         </div>
 
-        {/* Organizer info */}
+        {/* ── Organizer Info ────────────────────────────────────────────────── */}
         <div style={sectionStyle}>
           <span style={labelStyle}>Organizer Info</span>
           <p style={{ fontSize: 12, color: 'var(--ec-text-3)', marginBottom: 14, lineHeight: 1.5 }}>
-            Shown on the microsite so guests can contact you.
+            Shown on the microsite and included in email invitations so guests can contact you.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <EcInput label="Your name" value={organizerName} onChange={e => setOrganizerName(e.target.value)} placeholder="Nag Rotte" />
@@ -206,7 +276,7 @@ export default function EventSettingsPage() {
           </div>
         </div>
 
-        {/* Schedule */}
+        {/* ── Schedule ─────────────────────────────────────────────────────── */}
         <div style={sectionStyle}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <span style={labelStyle}>Program / Schedule</span>
@@ -221,30 +291,22 @@ export default function EventSettingsPage() {
               {schedule.map((item, i) => (
                 <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                   <div style={{ width: 120, flexShrink: 0 }}>
-                    <EcInput
-                      value={item.time}
-                      onChange={e => updateScheduleItem(i, 'time', e.target.value)}
-                      placeholder="6:00 PM"
-                    />
+                    <EcInput value={item.time} onChange={e => updateScheduleItem(i, 'time', e.target.value)} placeholder="6:00 PM" />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <EcInput
-                      value={item.description}
-                      onChange={e => updateScheduleItem(i, 'description', e.target.value)}
-                      placeholder="Pravachanam begins"
-                    />
+                    <EcInput value={item.description} onChange={e => updateScheduleItem(i, 'description', e.target.value)} placeholder="Pravachanam begins" />
                   </div>
                   <button
                     onClick={() => removeScheduleItem(i)}
                     style={{ background: 'none', border: 'none', color: 'var(--ec-text-3)', cursor: 'pointer', fontSize: 18, padding: '8px 4px', flexShrink: 0 }}
-                  >×</button>
+                  >&#215;</button>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        {/* Gallery */}
+        {/* ── Gallery ──────────────────────────────────────────────────────── */}
         <div style={sectionStyle}>
           <span style={labelStyle}>Post-Event Photo Gallery</span>
           <p style={{ fontSize: 12, color: 'var(--ec-text-3)', marginBottom: 12, lineHeight: 1.5 }}>
@@ -258,12 +320,16 @@ export default function EventSettingsPage() {
           />
         </div>
 
-        {/* Status */}
-        <div style={{ ...sectionStyle, background: isPublished ? 'var(--ec-success-bg)' : 'var(--ec-surface)', border: `1px solid ${isPublished ? 'var(--ec-success-border)' : 'var(--ec-border)'}` }}>
+        {/* ── Status ───────────────────────────────────────────────────────── */}
+        <div style={{
+          ...sectionStyle,
+          background: isPublished ? 'var(--ec-success-bg)' : 'var(--ec-surface)',
+          border: `1px solid ${isPublished ? 'var(--ec-success-border)' : 'var(--ec-border)'}`,
+        }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <p style={{ fontSize: 14, fontWeight: 600, color: isPublished ? 'var(--ec-success)' : 'var(--ec-text-1)', marginBottom: 4 }}>
-                {isPublished ? '✓ Microsite is Live' : 'Microsite not published yet'}
+                {isPublished ? '&#10003; Microsite is Live' : 'Microsite not published yet'}
               </p>
               <p style={{ fontSize: 12, color: 'var(--ec-text-3)' }}>
                 {isPublished
@@ -273,7 +339,7 @@ export default function EventSettingsPage() {
             </div>
             {isPublished && slug && (
               <a href={`/e/${slug}`} target="_blank" rel="noreferrer">
-                <EcButton size="sm" variant="ghost">Open →</EcButton>
+                <EcButton size="sm" variant="ghost">Open &#8594;</EcButton>
               </a>
             )}
           </div>
