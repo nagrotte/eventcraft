@@ -25,7 +25,13 @@ public class UpdateEventRequest
     public List<string>? Tags   { get; set; }
     public string? RsvpDeadline { get; set; }
     public string? Status       { get; set; }
-    public string? CoverImageUrl { get; set; }
+    public string? CoverImageUrl   { get; set; }
+    public string? MicrositeSlug   { get; set; }
+    public string? OrganizerName   { get; set; }
+    public string? OrganizerPhone  { get; set; }
+    public string? OrganizerEmail  { get; set; }
+    public string? Schedule        { get; set; }
+    public string? GalleryUrl      { get; set; }
 }
 
 public class PublishEventRequest
