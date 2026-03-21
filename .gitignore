@@ -39,3 +39,6 @@ apps/api/*/obj/
 
 keyssecrets.txt
 *.secrets.txt
+
+apps/api/EventCraft.Events/publish/
+deploy/
