@@ -77,10 +77,8 @@ export function TemplatesPanel({ fabricRef, eventTitle, eventDate, eventLocation
     try {
       const { FabricImage, IText, Rect } = await import('fabric');
 
-      // Resize canvas if template has different dimensions
-      if (t.canvasWidth !== (canvas as any).width || t.canvasHeight !== (canvas as any).height) {
-        (canvas as any).setDimensions({ width: t.canvasWidth, height: t.canvasHeight });
-      }
+      // Note: canvas stays at its initialized dimensions (600x850)
+      // Square templates (like mandala) will be centered within the standard canvas
 
       canvas.clear();
       canvas.backgroundColor = t.bgColor;
