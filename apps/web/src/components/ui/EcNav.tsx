@@ -1,5 +1,5 @@
-import { LogoMark } from '@/components/ui/LogoMark';
 'use client';
+import { LogoMark } from '@/components/ui/LogoMark';
 import { useTheme } from '@/components/ui/ThemeProvider';
 import { EcButton } from '@/components/ui/EcButton';
 import Link from 'next/link';

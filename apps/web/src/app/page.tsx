@@ -1,5 +1,5 @@
-import { LogoMark } from '@/components/ui/LogoMark';
 'use client';
+import { LogoMark } from '@/components/ui/LogoMark';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
