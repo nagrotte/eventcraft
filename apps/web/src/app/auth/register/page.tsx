@@ -24,16 +24,19 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await register(email, password);
-      // Try auto-login first (works if Lambda auto-confirm is set)
-      try {
-        await login(email, password);
-        router.push('/dashboard');
-      } catch {
-        // If login fails, user needs email confirmation
-        setStep('confirm');
-      }
+      // Auto-confirm Lambda handles confirmation — go straight to login
+      await login(email, password);
+      router.push('/dashboard');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Registration failed');
+      const msg = err instanceof Error ? err.message : 'Registration failed';
+      // User is auto-confirmed but session not ready — redirect to login
+      if (msg.toLowerCase().includes('already confirmed') || 
+          msg.toLowerCase().includes('notauthorized') ||
+          msg.toLowerCase().includes('user already exists')) {
+        router.push('/auth/login');
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
