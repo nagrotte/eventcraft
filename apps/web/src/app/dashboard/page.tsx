@@ -22,7 +22,7 @@ interface RsvpEntry {
 }
 
 export default function DashboardPage() {
-  const { user, loading: authLoading, logout } = useAuth();
+  const { user, loading: authLoading, logout, isAdmin } = useAuth();
   const { data: events, isLoading }            = useEvents();
   const createEvent = useCreateEvent();
   const deleteEvent = useDeleteEvent();
@@ -94,7 +94,7 @@ export default function DashboardPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--ec-bg)' }}>
-      <EcNav email={user?.email} onLogout={logout} />
+      <EcNav email={user?.email} isAdmin={isAdmin} onLogout={logout} />
       <main className="ec-page">
 
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32 }}>

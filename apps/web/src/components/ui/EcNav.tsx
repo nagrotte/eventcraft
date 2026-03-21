@@ -8,10 +8,11 @@ interface Breadcrumb {
 }
 interface EcNavProps {
   email?:       string;
+  isAdmin?:     boolean;
   onLogout?:    () => void;
   breadcrumbs?: Breadcrumb[];
 }
-export function EcNav({ email, onLogout, breadcrumbs }: EcNavProps) {
+export function EcNav({ email, isAdmin, onLogout, breadcrumbs }: EcNavProps) {
   const { theme, toggleTheme } = useTheme();
   return (
     <nav className="ec-nav">
@@ -59,6 +60,11 @@ export function EcNav({ email, onLogout, breadcrumbs }: EcNavProps) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {email && (
           <span style={{ fontSize: 12, color: 'var(--ec-text-3)' }}>{email}</span>
+        )}
+        {isAdmin && (
+          <Link href="/admin" style={{ fontSize: 12, color: 'var(--ec-brand)', textDecoration: 'none', fontWeight: 500, padding: '4px 8px', borderRadius: 'var(--ec-radius-sm)', border: '1px solid var(--ec-brand-border)', background: 'var(--ec-brand-subtle)' }}>
+            Admin
+          </Link>
         )}
         <button
           onClick={toggleTheme}

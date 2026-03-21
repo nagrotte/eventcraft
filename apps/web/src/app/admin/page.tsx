@@ -7,8 +7,6 @@ import { EcNav } from '@/components/ui/EcNav';
 import { EcButton } from '@/components/ui/EcButton';
 import apiClient from '@/lib/api-client';
 
-const ADMIN_EMAIL = 'nag.rotte@gmail.com';
-
 interface CognitoUser {
   username:  string;
   email:     string;
@@ -19,7 +17,7 @@ interface CognitoUser {
 }
 
 export default function AdminPage() {
-  const { user, loading: authLoading, logout } = useAuth();
+  const { user, loading: authLoading, logout, isAdmin } = useAuth();
   const router = useRouter();
   const [users,        setUsers]        = useState<CognitoUser[]>([]);
   const [loading,      setLoading]      = useState(true);
@@ -28,11 +26,11 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!authLoading && !user) { router.push('/auth/login'); return; }
-    if (!authLoading && user && user.email !== ADMIN_EMAIL) { router.push('/dashboard'); return; }
+    if (!authLoading && user && !isAdmin) { router.push('/dashboard'); return; }
   }, [user, authLoading, router]);
 
   useEffect(() => {
-    if (!user || user.email !== ADMIN_EMAIL) return;
+    if (!user || !isAdmin) return;
     loadUsers();
   }, [user]);
 
@@ -81,7 +79,7 @@ export default function AdminPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--ec-bg)' }}>
-      <EcNav email={user?.email} onLogout={logout} breadcrumbs={[{ label: 'Admin' }]} />
+      <EcNav email={user?.email} isAdmin={isAdmin} onLogout={logout} breadcrumbs={[{ label: 'Admin' }]} />
       <main className="ec-page">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
           <div>
@@ -133,7 +131,7 @@ export default function AdminPage() {
                       </EcButton>
                     </>
                   )}
-                  {u.email === ADMIN_EMAIL && (
+                  {u.email === user?.email && (
                     <span style={{ fontSize: 11, color: 'var(--ec-brand)', padding: '3px 8px', borderRadius: 10, background: 'var(--ec-brand-subtle)', border: '1px solid var(--ec-brand-border)' }}>Owner</span>
                   )}
                 </div>

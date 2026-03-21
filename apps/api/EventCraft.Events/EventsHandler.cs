@@ -268,8 +268,8 @@ public class EventsHandler
         var userId = GetUserId(req);
         if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
         var claims = req.RequestContext?.Authorizer?.Claims;
-        var callerEmail = claims != null && claims.ContainsKey("email") ? claims["email"] : "";
-        if (callerEmail != "nag.rotte@gmail.com") return ErrorResponse(403, "FORBIDDEN", "Admin only");
+        var groups = claims != null && claims.ContainsKey("cognito:groups") ? claims["cognito:groups"] : "";
+        if (!groups.Contains("admin")) return ErrorResponse(403, "FORBIDDEN", "Admin only");
         var cognito = new Amazon.CognitoIdentityProvider.AmazonCognitoIdentityProviderClient();
         var userPoolId = System.Environment.GetEnvironmentVariable("COGNITO_USER_POOL_ID") ?? "";
         var users = new System.Collections.Generic.List<object>();
