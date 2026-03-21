@@ -68,33 +68,25 @@ public class EventsHandler
         try
         {
             if (method == "GET"    && path == "/health")               return Health();
-            if (method == "GET"    && path == "/admin/users")                                          return await ListUsers(request);
-              if (method == "POST"   && path.StartsWith("/admin/users/") && path.EndsWith("/enable"))  return await EnableUser(request);
-              if (method == "POST"   && path.StartsWith("/admin/users/") && path.EndsWith("/disable")) return await DisableUser(request);
-              if (method == "DELETE" && path.StartsWith("/admin/users/"))                              return await DeleteUser(request);
-              if (method == "GET"    && path == "/events")               return await ListEvents(request);
+            if (method == "GET"    && path == "/admin/users")          return await ListUsers(request);
+            if (method == "POST"   && path.StartsWith("/admin/users/") && path.EndsWith("/enable"))  return await EnableUser(request);
+            if (method == "POST"   && path.StartsWith("/admin/users/") && path.EndsWith("/disable")) return await DisableUser(request);
+            if (method == "DELETE" && path.StartsWith("/admin/users/"))                              return await DeleteUser(request);
+            if (method == "GET"    && path == "/events")               return await ListEvents(request);
             if (method == "POST"   && path == "/events")               return await CreateEvent(request);
 
-            // Design routes
             if (method == "GET"    && path.StartsWith("/events/") && path.EndsWith("/design"))
                 return await GetDesign(request);
             if (method == "POST"   && path.StartsWith("/events/") && path.EndsWith("/design"))
                 return await SaveDesign(request);
-
-            // Upload presigned URL
             if (method == "POST"   && path.StartsWith("/events/") && path.EndsWith("/upload-url"))
                 return await GetUploadUrl(request);
-
-            // RSVP — public (no auth) + admin list
             if (method == "POST"   && path.StartsWith("/events/") && path.EndsWith("/rsvp"))
                 return await SubmitRsvp(request);
             if (method == "GET"    && path.StartsWith("/events/") && path.EndsWith("/rsvp"))
                 return await ListRsvps(request);
-
-            // Public event page (no auth required)
             if (method == "GET"    && path.StartsWith("/events/") && path.EndsWith("/public"))
                 return await GetPublicEvent(request);
-
             if (method == "GET"    && path.StartsWith("/events/"))     return await GetEvent(request);
             if (method == "PUT"    && path.StartsWith("/events/") && path.EndsWith("/publish"))
                 return await PublishEvent(request);
@@ -144,15 +136,14 @@ public class EventsHandler
         var repo    = _services.GetRequiredService<IEventRepository>();
         var entity  = await repo.GetByIdAsync(eventId);
         if (entity is null) return NotFoundResponse();
-        // Return safe public subset only
         return OkResponse(ApiResponse<object>.Ok(new {
-            eventId  = entity.EventId,
-            title    = entity.Title,
-            eventDate = entity.EventDate,
-            location = entity.Location,
+            eventId     = entity.EventId,
+            title       = entity.Title,
+            eventDate   = entity.EventDate,
+            location    = entity.Location,
             description = entity.Description,
-            canvasJson = entity.DesignJson,
-            status   = entity.Status,
+            canvasJson  = entity.DesignJson,
+            status      = entity.Status,
         }));
     }
 
@@ -235,7 +226,6 @@ public class EventsHandler
         var eventId = GetSegment(req.Path, 1);
         var body    = Deserialize<UploadUrlRequest>(req.Body);
         if (body is null) return ErrorResponse(400, "BAD_REQUEST", "Invalid request body");
-
         var s3     = _services.GetRequiredService<IAmazonS3>();
         var key    = $"uploads/{userId}/{eventId}/{Guid.NewGuid()}-{body.FileName}";
         var urlReq = new GetPreSignedUrlRequest
@@ -248,7 +238,6 @@ public class EventsHandler
         };
         var presignedUrl = s3.GetPreSignedURL(urlReq);
         var publicUrl    = $"https://{_mediaBucket}.s3.amazonaws.com/{key}";
-
         return OkResponse(ApiResponse<object>.Ok(new { uploadUrl = presignedUrl, publicUrl }));
     }
 
@@ -259,7 +248,6 @@ public class EventsHandler
         if (body is null) return ErrorResponse(400, "BAD_REQUEST", "Invalid request body");
         if (string.IsNullOrWhiteSpace(body.Name) || string.IsNullOrWhiteSpace(body.Email))
             return ErrorResponse(400, "VALIDATION_ERROR", "Name and email are required");
-
         var repo = _services.GetRequiredService<IEventRepository>();
         await repo.SaveRsvpAsync(eventId, body);
         return OkResponse(ApiResponse<object>.Ok(new { submitted = true }));
@@ -271,6 +259,88 @@ public class EventsHandler
         var repo    = _services.GetRequiredService<IEventRepository>();
         var rsvps   = await repo.ListRsvpsAsync(eventId);
         return OkResponse(ApiResponse<object>.Ok(rsvps));
+    }
+
+    // ── Admin handlers ────────────────────────────────────────────────────────
+
+    private async Task<APIGatewayProxyResponse> ListUsers(APIGatewayProxyRequest req)
+    {
+        var userId = GetUserId(req);
+        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+        var claims = req.RequestContext?.Authorizer?.Claims;
+        var callerEmail = claims != null && claims.ContainsKey("email") ? claims["email"] : "";
+        if (callerEmail != "nag.rotte@gmail.com") return ErrorResponse(403, "FORBIDDEN", "Admin only");
+        var cognito = new Amazon.CognitoIdentityProvider.AmazonCognitoIdentityProviderClient();
+        var userPoolId = System.Environment.GetEnvironmentVariable("COGNITO_USER_POOL_ID") ?? "";
+        var users = new System.Collections.Generic.List<object>();
+        string? paginationToken = null;
+        do {
+            var listReq = new Amazon.CognitoIdentityProvider.Model.ListUsersRequest
+            {
+                UserPoolId = userPoolId,
+                Limit = 60,
+                PaginationToken = paginationToken
+            };
+            var resp = await cognito.ListUsersAsync(listReq);
+            foreach (var u in resp.Users) {
+                var email = u.Attributes.Find(a => a.Name == "email")?.Value ?? "";
+                users.Add(new {
+                    username = u.Username,
+                    email,
+                    status   = u.UserStatus.Value,
+                    enabled  = u.Enabled,
+                    created  = u.UserCreateDate,
+                    modified = u.UserLastModifiedDate
+                });
+            }
+            paginationToken = resp.PaginationToken;
+        } while (paginationToken != null);
+        return OkResponse(ApiResponse<object>.Ok(users));
+    }
+
+    private async Task<APIGatewayProxyResponse> EnableUser(APIGatewayProxyRequest req)
+    {
+        var userId = GetUserId(req);
+        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+        var username = GetSegment(req.Path, 2);
+        var cognito = new Amazon.CognitoIdentityProvider.AmazonCognitoIdentityProviderClient();
+        var userPoolId = System.Environment.GetEnvironmentVariable("COGNITO_USER_POOL_ID") ?? "";
+        await cognito.AdminEnableUserAsync(new Amazon.CognitoIdentityProvider.Model.AdminEnableUserRequest
+        {
+            UserPoolId = userPoolId,
+            Username = username
+        });
+        return OkResponse(ApiResponse<object>.Ok(new { success = true }));
+    }
+
+    private async Task<APIGatewayProxyResponse> DisableUser(APIGatewayProxyRequest req)
+    {
+        var userId = GetUserId(req);
+        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+        var username = GetSegment(req.Path, 2);
+        var cognito = new Amazon.CognitoIdentityProvider.AmazonCognitoIdentityProviderClient();
+        var userPoolId = System.Environment.GetEnvironmentVariable("COGNITO_USER_POOL_ID") ?? "";
+        await cognito.AdminDisableUserAsync(new Amazon.CognitoIdentityProvider.Model.AdminDisableUserRequest
+        {
+            UserPoolId = userPoolId,
+            Username = username
+        });
+        return OkResponse(ApiResponse<object>.Ok(new { success = true }));
+    }
+
+    private async Task<APIGatewayProxyResponse> DeleteUser(APIGatewayProxyRequest req)
+    {
+        var userId = GetUserId(req);
+        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+        var username = GetSegment(req.Path, 2);
+        var cognito = new Amazon.CognitoIdentityProvider.AmazonCognitoIdentityProviderClient();
+        var userPoolId = System.Environment.GetEnvironmentVariable("COGNITO_USER_POOL_ID") ?? "";
+        await cognito.AdminDeleteUserAsync(new Amazon.CognitoIdentityProvider.Model.AdminDeleteUserRequest
+        {
+            UserPoolId = userPoolId,
+            Username = username
+        });
+        return OkResponse(ApiResponse<object>.Ok(new { success = true }));
     }
 
     // ── Response helpers ──────────────────────────────────────────────────────
@@ -319,4 +389,3 @@ public class EventsHandler
         catch { return null; }
     }
 }
-
