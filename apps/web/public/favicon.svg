@@ -1,16 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="8" fill="#0F0A2E"/>
+  <style>
+    .bg { fill: #0F0A2E; }
+    @media (prefers-color-scheme: light) { .bg { fill: #ffffff; } }
+  </style>
+  <rect width="32" height="32" rx="8" class="bg"/>
   <g transform="translate(16, 17)">
-    <ellipse cx="0"   cy="-10" rx="4"   ry="9"   fill="#6366F1" opacity="0.9"/>
-    <ellipse cx="8"   cy="-6"  rx="3.5" ry="7.5" fill="#6366F1" opacity="0.7" transform="rotate(35 8 -6)"/>
-    <ellipse cx="-8"  cy="-6"  rx="3.5" ry="7.5" fill="#6366F1" opacity="0.7" transform="rotate(-35 -8 -6)"/>
-    <ellipse cx="12"  cy="1"   rx="3"   ry="6"   fill="#818CF8" opacity="0.35" transform="rotate(60 12 1)"/>
-    <ellipse cx="-12" cy="1"   rx="3"   ry="6"   fill="#818CF8" opacity="0.35" transform="rotate(-60 -12 1)"/>
-    <ellipse cx="0"   cy="-6"  rx="2.5" ry="5.5" fill="#D4AF37" opacity="0.95"/>
-    <ellipse cx="5"   cy="-4"  rx="2"   ry="5"   fill="#D4AF37" opacity="0.8" transform="rotate(30 5 -4)"/>
-    <ellipse cx="-5"  cy="-4"  rx="2"   ry="5"   fill="#D4AF37" opacity="0.8" transform="rotate(-30 -5 -4)"/>
-    <circle cx="0" cy="-6" r="3"   fill="#0F0A2E"/>
-    <circle cx="0" cy="-6" r="1.8" fill="#D4AF37"/>
-    <line x1="0" y1="2" x2="0" y2="8" stroke="#6366F1" stroke-width="1.2" stroke-linecap="round" opacity="0.7"/>
+    <ellipse cx="0"   cy="-10" rx="4"   ry="9"   fill="#4F6FBF" opacity="0.9"/>
+    <ellipse cx="8"   cy="-6"  rx="3.5" ry="8"   fill="#4F6FBF" opacity="0.7"  transform="rotate(38 8 -6)"/>
+    <ellipse cx="-8"  cy="-6"  rx="3.5" ry="8"   fill="#4F6FBF" opacity="0.7"  transform="rotate(-38 -8 -6)"/>
+    <ellipse cx="12"  cy="1"   rx="3"   ry="6"   fill="#7B9FD4" opacity="0.4"  transform="rotate(65 12 1)"/>
+    <ellipse cx="-12" cy="1"   rx="3"   ry="6"   fill="#7B9FD4" opacity="0.4"  transform="rotate(-65 -12 1)"/>
+    <circle cx="0" cy="-5" r="4.5" fill="#0F0A2E"/>
+    <circle cx="0" cy="-5" r="2.8" fill="#D4AF37"/>
+    <circle cx="0" cy="-5" r="1.2" fill="#0F0A2E"/>
+    <line x1="0" y1="0" x2="0" y2="8" stroke="#4F6FBF" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="-6" y1="8" x2="6" y2="8" stroke="#4F6FBF" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
   </g>
 </svg>

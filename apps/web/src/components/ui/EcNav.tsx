@@ -19,7 +19,6 @@ export function EcNav({ email, onLogout, breadcrumbs }: EcNavProps) {
         <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
           <div style={{ width: 32, height: 32, flexShrink: 0 }}>
             <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect width="32" height="32" rx="7" fill="#0F0A2E"/>
               <g transform="translate(16,18)">
                 <ellipse cx="0"   cy="-11" rx="3.5" ry="9"   fill="#4F6FBF" opacity="0.85"/>
                 <ellipse cx="9"   cy="-6"  rx="3.5" ry="8.5" fill="#4F6FBF" opacity="0.7"  transform="rotate(38 9 -6)"/>
