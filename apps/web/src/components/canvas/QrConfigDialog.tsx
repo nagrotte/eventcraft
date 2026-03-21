@@ -54,14 +54,17 @@ const OPTIONS: QrOption[] = [
   {
     type:        'calendar',
     label:       'Add to Calendar',
-    description: 'Scan to add this event to phone calendar',
+    description: 'Scan to add this event to phone calendar (uses event title, date & location)',
     icon:        '📅',
   },
   {
     type:        'vcard',
-    label:       'Organizer Contact',
+    label:       'Organizer Contact (vCard)',
     description: 'Scan to save organizer as a phone contact',
     icon:        '👤',
+    needsInput:  true,
+    inputLabel:  'Organizer name (overrides Settings value)',
+    inputPlaceholder: 'Leave blank to use name from Event Settings',
   },
   {
     type:        'whatsapp',
@@ -171,7 +174,8 @@ export function QrConfigDialog({
   }
 
   const canPlace = !!getFinalUrl() &&
-    (selected !== 'custom' || inputVal.trim().startsWith('http'));
+    (selected !== 'custom' || inputVal.trim().startsWith('http')) &&
+    (selected !== 'vcard' || !!(inputVal.trim() || organizerName));
 
   return (
     <div style={{
@@ -242,10 +246,20 @@ export function QrConfigDialog({
                 Leave blank to use event location: <em>{eventLocation}</em>
               </p>
             )}
-            {selected === 'vcard' && organizerName && (
-              <p style={{ fontSize: 11, color: 'var(--ec-text-3)', marginTop: 4 }}>
-                Leave blank to use organizer name: <em>{organizerName}</em>
-              </p>
+            {selected === 'vcard' && (
+              <div style={{ marginTop: 6 }}>
+                {organizerName ? (
+                  <p style={{ fontSize: 11, color: 'var(--ec-text-3)' }}>
+                    Leave blank to use: <strong>{organizerName}</strong>
+                    {organizerPhone ? ` · ${organizerPhone}` : ''}
+                    {organizerEmail ? ` · ${organizerEmail}` : ''}
+                  </p>
+                ) : (
+                  <p style={{ fontSize: 11, color: 'var(--ec-warning)', padding: '6px 10px', background: 'var(--ec-warning-bg)', border: '1px solid var(--ec-warning-border)', borderRadius: 6 }}>
+                    ⚠ No organizer info set. Go to Event Settings to add your name, phone and email — or type a name above.
+                  </p>
+                )}
+              </div>
             )}
             {selected === 'whatsapp' && (
               <p style={{ fontSize: 11, color: 'var(--ec-text-3)', marginTop: 4 }}>

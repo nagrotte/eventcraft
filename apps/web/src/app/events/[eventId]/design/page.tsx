@@ -114,6 +114,10 @@ export default function DesignPage() {
           eventTitle={event?.title}
           eventDate={event?.eventDate}
           eventLocation={event?.location}
+          micrositeSlug={event?.micrositeSlug}
+          organizerName={event?.organizerName}
+          organizerPhone={event?.organizerPhone}
+          organizerEmail={event?.organizerEmail}
           initialPrompt={wizardPrompt}
         />
       )}

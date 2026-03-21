@@ -12,16 +12,20 @@ import { TemplatesPanel }   from '@/components/canvas/TemplatesPanel';
 import { EcButton }         from '@/components/ui/EcButton';
 
 interface CanvasShellProps {
-  eventId:        string;
-  eventTitle?:    string;
-  eventDate?:     string;
-  eventLocation?: string;
-  initialPrompt?: string | null;
+  eventId:         string;
+  eventTitle?:     string;
+  eventDate?:      string;
+  eventLocation?:  string;
+  micrositeSlug?:  string;
+  organizerName?:  string;
+  organizerPhone?: string;
+  organizerEmail?: string;
+  initialPrompt?:  string | null;
 }
 
 interface ContextMenu { x: number; y: number; }
 
-export function CanvasShell({ eventId, eventTitle, eventDate, eventLocation, initialPrompt }: CanvasShellProps) {
+export function CanvasShell({ eventId, eventTitle, eventDate, eventLocation, micrositeSlug, organizerName, organizerPhone, organizerEmail, initialPrompt }: CanvasShellProps) {
   const canvasId              = `canvas-${eventId}`;
   const { fabricRef, ready }  = useCanvas(canvasId);
   const { save, saving }      = useDesign(eventId, fabricRef, ready);
@@ -130,6 +134,13 @@ export function CanvasShell({ eventId, eventTitle, eventDate, eventLocation, ini
           activeTool={activeTool}
           onToolChange={setActiveTool}
           eventId={eventId}
+          eventTitle={eventTitle}
+          eventDate={eventDate}
+          eventLocation={eventLocation}
+          micrositeSlug={micrositeSlug}
+          organizerName={organizerName}
+          organizerPhone={organizerPhone}
+          organizerEmail={organizerEmail}
           onToggleImages={() => togglePanel('images')}
           showImages={showImages}
           onToggleTemplates={() => togglePanel('templates')}
@@ -137,7 +148,14 @@ export function CanvasShell({ eventId, eventTitle, eventDate, eventLocation, ini
           onDeleteSelected={deleteSelected}
         />
 
-        {showImages && <ImagePanel fabricRef={fabricRef} eventId={eventId} onClose={() => setShowImages(false)} />}
+        {showImages && (
+          <ImagePanel
+            fabricRef={fabricRef}
+            eventId={eventId}
+            onClose={() => setShowImages(false)}
+          />
+        )}
+
         {showTemplates && (
           <TemplatesPanel
             fabricRef={fabricRef}

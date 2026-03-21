@@ -172,7 +172,8 @@ public class EventsHandler
 
         var ses      = new AmazonSimpleEmailServiceClient(Amazon.RegionEndpoint.USEast1);
         var appUrl   = Environment.GetEnvironmentVariable("APP_URL") ?? "https://eventcraft.irotte.com";
-        var rsvpUrl  = ev.MicrositeSlug != null ? $"{appUrl}/e/{ev.MicrositeSlug}" : $"{appUrl}/rsvp/{eventId}";
+        var eventUrl = !string.IsNullOrEmpty(ev.MicrositeSlug) ? $"{appUrl}/e/{ev.MicrositeSlug}" : $"{appUrl}/rsvp/{eventId}";
+        var rsvpUrl  = eventUrl;
 
         var formattedDate = DateTime.TryParse(ev.EventDate, out var dt)
             ? dt.ToString("dddd, MMMM d, yyyy")
@@ -434,39 +435,56 @@ public class EventsHandler
     // ── Email template ────────────────────────────────────────────────────────
 
     private static string BuildEmailHtml(string name, string title, string date, string location, string rsvpUrl) => $@"
-<!DOCTYPE html><html><head><meta charset='utf-8'>
-<style>
-  body{{font-family:Georgia,serif;background:#f5f0e8;margin:0;padding:20px}}
-  .card{{max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)}}
-  .header{{background:#0F0A2E;padding:32px;text-align:center}}
-  .logo{{color:#D4AF37;font-size:22px;font-weight:700;letter-spacing:1px}}
-  .body{{padding:40px 36px}}
-  .title{{font-size:28px;font-weight:700;color:#1a1a2e;margin-bottom:20px;line-height:1.3}}
-  .detail{{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}}
-  .icon{{font-size:16px;margin-top:2px}}
-  .text{{font-size:15px;color:#444;line-height:1.5}}
-  hr{{border:none;border-top:1px solid #e8e5dc;margin:28px 0}}
-  .cta{{display:block;text-align:center;background:#4F6FBF;color:#fff;text-decoration:none;padding:16px 32px;border-radius:8px;font-size:16px;font-weight:600}}
-  .footer{{background:#f5f0e8;padding:20px 36px;text-align:center;font-size:12px;color:#999}}
-</style></head><body>
-<div class='card'>
-  <div class='header'><div class='logo'>EventCraft</div></div>
-  <div class='body'>
-    <p style='font-size:16px;color:#555;margin-bottom:24px'>Dear {name},</p>
-    <p class='title'>{title}</p>
-    <div class='detail'><span class='icon'>📅</span><span class='text'>{date}</span></div>
-    {(string.IsNullOrEmpty(location) ? "" : $"<div class='detail'><span class='icon'>📍</span><span class='text'>{location}</span></div>")}
-    <hr/>
-    <p style='font-size:15px;color:#555;margin-bottom:24px;line-height:1.6'>
-      You have been cordially invited to this special occasion. Please RSVP by clicking the button below.
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset='utf-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1'>
+  <style>
+    body{{margin:0;padding:0;background:#08080f;font-family:Georgia,serif;color:#fff}}
+    .wrap{{max-width:560px;margin:0 auto;padding:32px 16px}}
+    .badge{{display:inline-flex;align-items:center;gap:8px;padding:6px 16px;background:rgba(79,111,191,0.1);border:1px solid rgba(79,111,191,0.25);border-radius:20px;margin-bottom:28px}}
+    .title{{font-size:28px;font-weight:700;color:#fff;margin-bottom:8px;line-height:1.2}}
+    .card{{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:24px;margin-bottom:24px}}
+    .row{{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px}}
+    .lbl{{font-size:12px;color:#666;margin-bottom:2px}}
+    .val{{font-size:15px;color:#fff;font-weight:500}}
+    .cta{{display:inline-block;background:#4F6FBF;color:#fff;text-decoration:none;padding:16px 40px;border-radius:10px;font-size:16px;font-weight:600;letter-spacing:0.5px}}
+    .footer{{text-align:center;font-size:11px;color:rgba(255,255,255,0.15);margin-top:32px;font-family:Helvetica,sans-serif}}
+  </style>
+</head>
+<body>
+  <div class='wrap'>
+    <div style='text-align:center;margin-bottom:28px'>
+      <div class='badge'>
+        <img src='https://eventcraft.irotte.com/favicon.svg' width='16' height='16' alt='' style='vertical-align:middle'/>
+        <span style='font-size:12px;color:#4F6FBF;font-weight:600;letter-spacing:0.5px'>EventCraft</span>
+      </div>
+    </div>
+    <p style='font-size:15px;color:#aaa;margin-bottom:16px'>Dear {name},</p>
+    <h1 class='title'>{title}</h1>
+    <p style='font-size:15px;color:#aaa;line-height:1.7;margin-bottom:24px'>You have been cordially invited to this special occasion.</p>
+    <div class='card'>
+      <div class='row'>
+        <span style='font-size:18px'>📅</span>
+        <div><div class='lbl'>Date &amp; Time</div><div class='val'>{date}</div></div>
+      </div>
+      {(string.IsNullOrEmpty(location) ? "" : $"<div class=\"row\"><span style=\"font-size:18px\">📍</span><div><div class=\"lbl\">Location</div><div class=\"val\">{location}</div></div></div>")}
+    </div>
+    <div style='text-align:center;margin:28px 0'>
+      <a href='{rsvpUrl}' class='cta'>RSVP Now</a>
+    </div>
+    <p style='text-align:center;font-size:12px;color:#555;margin-top:12px'>
+      Or open: <a href='{rsvpUrl}' style='color:#4F6FBF'>{rsvpUrl}</a>
     </p>
-    <a href='{rsvpUrl}' class='cta'>RSVP Now</a>
+    <div class='footer'>
+      <p>Powered by EventCraft &middot; eventcraft.irotte.com</p>
+      <p style='margin-top:4px'>If you did not expect this, you may ignore this email.</p>
+    </div>
   </div>
-  <div class='footer'>
-    <p>Powered by EventCraft · eventcraft.irotte.com</p>
-    <p style='margin-top:4px'>If you did not expect this invitation, you may ignore this email.</p>
-  </div>
-</div></body></html>";
+</body>
+</html>";
+
 
     private static void context_log(string msg) => Console.WriteLine(msg);
 

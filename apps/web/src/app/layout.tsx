@@ -6,8 +6,13 @@ import { AppProviders } from '@/components/AppProviders';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title:       'EventCraft',
-  description: 'Create and manage beautiful event invitations'
+  title:       'EventCraft - Invitation Studio',
+  description: 'Design and send beautiful event invitations',
+  icons: {
+    icon:    [{ url: '/favicon.svg', type: 'image/svg+xml' }],
+    shortcut: '/favicon.svg',
+    apple:    '/favicon.svg',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

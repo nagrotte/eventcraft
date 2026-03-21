@@ -9,6 +9,13 @@ interface CanvasToolbarProps {
   activeTool:         string;
   onToolChange:       (tool: string) => void;
   eventId?:           string;
+  eventTitle?:        string;
+  eventDate?:         string;
+  eventLocation?:     string;
+  micrositeSlug?:     string;
+  organizerName?:     string;
+  organizerPhone?:    string;
+  organizerEmail?:    string;
   onToggleImages?:    () => void;
   showImages?:        boolean;
   onToggleTemplates?: () => void;
@@ -18,6 +25,8 @@ interface CanvasToolbarProps {
 
 export function CanvasToolbar({
   fabricRef, activeTool, onToolChange, eventId,
+  eventTitle, eventDate, eventLocation,
+  micrositeSlug, organizerName, organizerPhone, organizerEmail,
   onToggleImages, showImages,
   onToggleTemplates, showTemplates,
   onDeleteSelected
@@ -98,14 +107,8 @@ export function CanvasToolbar({
             {t.label}
           </button>
         ))}
-
-        {/* QR */}
         <button title="Add QR Code" style={s(false)} onClick={() => setShowQrDialog(true)}>⊞</button>
-
-        {/* Images */}
         <button title="Stock photos & upload" style={s(!!showImages)} onClick={onToggleImages}>🖼</button>
-
-        {/* Templates */}
         <button title="Templates" style={s(!!showTemplates)} onClick={onToggleTemplates}>
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
             <rect x="1" y="1" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.2"/>
@@ -114,7 +117,6 @@ export function CanvasToolbar({
             <rect x="8" y="8" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.2"/>
           </svg>
         </button>
-
         <div style={{ flex:1 }} />
         <button title="Bring forward" style={s(false)} onClick={bringForward}>↑</button>
         <button title="Send backward" style={s(false)} onClick={sendBackward}>↓</button>
@@ -122,7 +124,18 @@ export function CanvasToolbar({
       </div>
 
       {showQrDialog && (
-        <QrConfigDialog eventId={eventId??''} onPlace={placeQrCode} onClose={() => setShowQrDialog(false)} />
+        <QrConfigDialog
+          eventId={eventId ?? ''}
+          eventTitle={eventTitle}
+          eventDate={eventDate}
+          eventLocation={eventLocation}
+          micrositeSlug={micrositeSlug}
+          organizerName={organizerName}
+          organizerPhone={organizerPhone}
+          organizerEmail={organizerEmail}
+          onPlace={placeQrCode}
+          onClose={() => setShowQrDialog(false)}
+        />
       )}
     </>
   );
