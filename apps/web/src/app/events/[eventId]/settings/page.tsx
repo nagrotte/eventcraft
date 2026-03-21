@@ -189,7 +189,7 @@ export default function EventSettingsPage() {
         // Upload directly to S3
         const s3Res = await fetch(urlData.url, {
           method:  'PUT',
-          headers: {},
+          headers: { 'Content-Type': file.type || 'image/jpeg' },
           body:    file,
         });
         if (!s3Res.ok) throw new Error('S3 upload failed');
@@ -444,17 +444,22 @@ export default function EventSettingsPage() {
             </div>
           )}
 
-          {/* Manual URL fallback */}
-          {!galleryUrl && (
-            <div style={{ marginTop: 12 }}>
-              <p style={{ fontSize: 11, color: 'var(--ec-text-3)', marginBottom: 6 }}>Or paste an existing gallery URL:</p>
-              <EcInput
-                value={galleryUrl}
-                onChange={e => setGalleryUrl(e.target.value)}
-                placeholder="https://www.akriti.net/gallery/..."
-              />
-            </div>
-          )}
+          {/* Always-editable gallery URL */}
+          <div style={{ marginTop: 12 }}>
+            <p style={{ fontSize: 11, color: 'var(--ec-text-3)', marginBottom: 6 }}>
+              {galleryUrl ? 'Change or update gallery URL:' : 'Or paste an existing gallery URL:'}
+            </p>
+            <EcInput
+              value={galleryUrl}
+              onChange={e => setGalleryUrl(e.target.value)}
+              placeholder="https://www.akriti.net/gallery?id=..."
+            />
+            {galleryUrl && (
+              <p style={{ fontSize: 11, color: 'var(--ec-text-3)', marginTop: 4 }}>
+                Edit the URL above then click <strong>Save</strong> to update.
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Status */}
