@@ -34,10 +34,10 @@ public class EventsHandler
 
     static EventsHandler()
     {
-        var env        = Environment.GetEnvironmentVariable("ENVIRONMENT")    ?? "staging";
-        var tableName  = Environment.GetEnvironmentVariable("DYNAMODB_TABLE") ?? $"eventcraft-{env}";
-        var awsRegion  = Environment.GetEnvironmentVariable("AWS_REGION")     ?? "us-east-1";
-        _mediaBucket   = Environment.GetEnvironmentVariable("MEDIA_BUCKET")   ?? $"eventcraft-media-{env}";
+        var env       = Environment.GetEnvironmentVariable("ENVIRONMENT")    ?? "staging";
+        var tableName = Environment.GetEnvironmentVariable("DYNAMODB_TABLE") ?? $"eventcraft-{env}";
+        var awsRegion = Environment.GetEnvironmentVariable("AWS_REGION")     ?? "us-east-1";
+        _mediaBucket  = Environment.GetEnvironmentVariable("MEDIA_BUCKET")   ?? $"eventcraft-media-{env}";
 
         var sc = new ServiceCollection();
         sc.AddLogging(b => b.AddConsole());
@@ -73,10 +73,10 @@ public class EventsHandler
             if (method == "GET" && path == "/health") return Health();
 
             // Admin
-            if (method == "GET"    && path == "/admin/users")                                          return await ListUsers(request);
-            if (method == "POST"   && path.StartsWith("/admin/users/") && path.EndsWith("/enable"))    return await EnableUser(request);
-            if (method == "POST"   && path.StartsWith("/admin/users/") && path.EndsWith("/disable"))   return await DisableUser(request);
-            if (method == "DELETE" && path.StartsWith("/admin/users/"))                                return await DeleteUser(request);
+            if (method == "GET"    && path == "/admin/users")                                         return await ListUsers(request);
+            if (method == "POST"   && path.StartsWith("/admin/users/") && path.EndsWith("/enable"))   return await EnableUser(request);
+            if (method == "POST"   && path.StartsWith("/admin/users/") && path.EndsWith("/disable"))  return await DisableUser(request);
+            if (method == "DELETE" && path.StartsWith("/admin/users/"))                               return await DeleteUser(request);
 
             // Contacts
             if (method == "GET"    && path == "/contacts")           return await ListContacts(request);
@@ -84,25 +84,25 @@ public class EventsHandler
             if (method == "DELETE" && path.StartsWith("/contacts/")) return await DeleteContact(request);
 
             // Events
-            if (method == "GET"  && path == "/events")  return await ListEvents(request);
-            if (method == "POST" && path == "/events")  return await CreateEvent(request);
+            if (method == "GET"  && path == "/events") return await ListEvents(request);
+            if (method == "POST" && path == "/events") return await CreateEvent(request);
 
-            // Slug-based public lookup (before /events/{id} routes)
+            // Slug-based public lookup (must be before /events/{id} routes)
             if (method == "GET" && path.StartsWith("/events/slug/") && path.EndsWith("/public"))
                 return await GetPublicEventBySlug(request);
 
             // Event sub-routes
-            if (method == "GET"  && path.StartsWith("/events/") && path.EndsWith("/design"))        return await GetDesign(request);
-            if (method == "POST" && path.StartsWith("/events/") && path.EndsWith("/design"))        return await SaveDesign(request);
-            if (method == "POST" && path.StartsWith("/events/") && path.EndsWith("/upload-url"))    return await GetUploadUrl(request);
-            if (method == "POST" && path.StartsWith("/events/") && path.EndsWith("/rsvp"))          return await SubmitRsvp(request);
-            if (method == "GET"  && path.StartsWith("/events/") && path.EndsWith("/rsvp"))          return await ListRsvps(request);
-            if (method == "GET"  && path.StartsWith("/events/") && path.EndsWith("/public"))        return await GetPublicEvent(request);
-            if (method == "POST" && path.StartsWith("/events/") && path.EndsWith("/invite/email"))  return await SendEmailInvites(request);
+            if (method == "GET"  && path.StartsWith("/events/") && path.EndsWith("/design"))       return await GetDesign(request);
+            if (method == "POST" && path.StartsWith("/events/") && path.EndsWith("/design"))       return await SaveDesign(request);
+            if (method == "POST" && path.StartsWith("/events/") && path.EndsWith("/upload-url"))   return await GetUploadUrl(request);
+            if (method == "POST" && path.StartsWith("/events/") && path.EndsWith("/rsvp"))         return await SubmitRsvp(request);
+            if (method == "GET"  && path.StartsWith("/events/") && path.EndsWith("/rsvp"))         return await ListRsvps(request);
+            if (method == "GET"  && path.StartsWith("/events/") && path.EndsWith("/public"))       return await GetPublicEvent(request);
+            if (method == "POST" && path.StartsWith("/events/") && path.EndsWith("/invite/email")) return await SendEmailInvites(request);
 
             // Event CRUD
             if (method == "GET"    && path.StartsWith("/events/")) return await GetEvent(request);
-            if (method == "PUT"    && path.StartsWith("/events/") && path.EndsWith("/publish"))     return await PublishEvent(request);
+            if (method == "PUT"    && path.StartsWith("/events/") && path.EndsWith("/publish"))    return await PublishEvent(request);
             if (method == "PUT"    && path.StartsWith("/events/")) return await UpdateEvent(request);
             if (method == "DELETE" && path.StartsWith("/events/")) return await DeleteEvent(request);
 
@@ -159,45 +159,65 @@ public class EventsHandler
     {
         var userId = GetUserId(req);
         if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+
         var eventId = GetSegment(req.Path, 1);
         var body    = Deserialize<SendInviteRequest>(req.Body);
         if (body is null) return ErrorResponse(400, "BAD_REQUEST", "Invalid request body");
 
-        var repo     = _services.GetRequiredService<IEventRepository>();
-        var ev       = await repo.GetByIdAsync(eventId);
+        var repo = _services.GetRequiredService<IEventRepository>();
+        var ev   = await repo.GetByIdAsync(eventId);
         if (ev is null || ev.UserId != userId) return NotFoundResponse();
 
         var contacts = await repo.ListContactsAsync(userId);
-        var targets  = contacts.Where(c => body.ContactIds.Contains(c.ContactId) && !string.IsNullOrEmpty(c.Email)).ToList();
+        var targets  = contacts
+            .Where(c => body.ContactIds.Contains(c.ContactId) && !string.IsNullOrEmpty(c.Email))
+            .ToList();
 
-        var ses      = new AmazonSimpleEmailServiceClient(Amazon.RegionEndpoint.USEast1);
-        var appUrl   = Environment.GetEnvironmentVariable("APP_URL") ?? "https://eventcraft.irotte.com";
-        var eventUrl = !string.IsNullOrEmpty(ev.MicrositeSlug) ? $"{appUrl}/e/{ev.MicrositeSlug}" : $"{appUrl}/rsvp/{eventId}";
-        var rsvpUrl  = eventUrl;
+        var ses    = new AmazonSimpleEmailServiceClient(Amazon.RegionEndpoint.USEast1);
+        var appUrl = Environment.GetEnvironmentVariable("APP_URL") ?? "https://eventcraft.irotte.com";
+        var rsvpUrl = !string.IsNullOrEmpty(ev.MicrositeSlug)
+            ? $"{appUrl}/e/{ev.MicrositeSlug}"
+            : $"{appUrl}/rsvp/{eventId}";
 
         var formattedDate = DateTime.TryParse(ev.EventDate, out var dt)
             ? dt.ToString("dddd, MMMM d, yyyy")
             : ev.EventDate;
 
-        var sent = new List<string>();
+        var sent   = new List<string>();
+        var failed = new List<string>();
+
         foreach (var contact in targets)
         {
-            var html = BuildEmailHtml(contact.Name, ev.Title, formattedDate, ev.Location ?? "", rsvpUrl);
-            try {
-                await ses.SendEmailAsync(new SendEmailRequest {
+            var html = BuildEmailHtml(
+                contact.Name,
+                ev.Title,
+                formattedDate,
+                ev.Location ?? "",
+                ev.OrganizerName ?? "",
+                rsvpUrl);
+
+            try
+            {
+                await ses.SendEmailAsync(new SendEmailRequest
+                {
                     Source      = "noreply@pragmaticconsulting.net",
                     Destination = new Destination { ToAddresses = new List<string> { contact.Email! } },
-                    Message     = new Message {
+                    Message     = new Message
+                    {
                         Subject = new Content($"You're invited: {ev.Title}"),
                         Body    = new Body { Html = new Content(html) }
                     }
                 });
                 sent.Add(contact.Email!);
-            } catch (Exception ex) {
-                context_log($"Failed to send to {contact.Email}: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to send to {contact.Email}: {ex.Message}");
+                failed.Add(contact.Email!);
             }
         }
-        return OkResponse(ApiResponse<object>.Ok(new { sent, total = targets.Count }));
+
+        return OkResponse(ApiResponse<object>.Ok(new { sent, failed, total = targets.Count }));
     }
 
     // ── Events ────────────────────────────────────────────────────────────────
@@ -236,7 +256,6 @@ public class EventsHandler
 
     private async Task<APIGatewayProxyResponse> GetPublicEventBySlug(APIGatewayProxyRequest req)
     {
-        // path: /events/slug/{slug}/public
         var parts  = req.Path.Trim('/').Split('/');
         var slug   = parts.Length >= 3 ? parts[2] : "";
         var repo   = _services.GetRequiredService<IEventRepository>();
@@ -341,9 +360,9 @@ public class EventsHandler
         var eventId = GetSegment(req.Path, 1);
         var body    = Deserialize<UploadUrlRequest>(req.Body);
         if (body is null) return ErrorResponse(400, "BAD_REQUEST", "Invalid request body");
-        var s3      = _services.GetRequiredService<IAmazonS3>();
-        var key     = $"uploads/{userId}/{eventId}/{Guid.NewGuid()}-{body.FileName}";
-        var urlReq  = new GetPreSignedUrlRequest
+        var s3     = _services.GetRequiredService<IAmazonS3>();
+        var key    = $"uploads/{userId}/{eventId}/{Guid.NewGuid()}-{body.FileName}";
+        var urlReq = new GetPreSignedUrlRequest
         {
             BucketName  = _mediaBucket,
             Key         = key,
@@ -389,11 +408,13 @@ public class EventsHandler
         var userPoolId = Environment.GetEnvironmentVariable("COGNITO_USER_POOL_ID") ?? "";
         var users      = new List<object>();
         string? paginationToken = null;
-        do {
+        do
+        {
             var listReq = new Amazon.CognitoIdentityProvider.Model.ListUsersRequest
                 { UserPoolId = userPoolId, Limit = 60, PaginationToken = paginationToken };
             var resp = await cognito.ListUsersAsync(listReq);
-            foreach (var u in resp.Users) {
+            foreach (var u in resp.Users)
+            {
                 var email = u.Attributes.Find(a => a.Name == "email")?.Value ?? "";
                 users.Add(new { username = u.Username, email, status = u.UserStatus.Value, enabled = u.Enabled, created = u.UserCreateDate, modified = u.UserLastModifiedDate });
             }
@@ -404,7 +425,8 @@ public class EventsHandler
 
     private async Task<APIGatewayProxyResponse> EnableUser(APIGatewayProxyRequest req)
     {
-        var userId = GetUserId(req); if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+        var userId = GetUserId(req);
+        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
         var username   = GetSegment(req.Path, 2);
         var cognito    = new Amazon.CognitoIdentityProvider.AmazonCognitoIdentityProviderClient();
         var userPoolId = Environment.GetEnvironmentVariable("COGNITO_USER_POOL_ID") ?? "";
@@ -414,7 +436,8 @@ public class EventsHandler
 
     private async Task<APIGatewayProxyResponse> DisableUser(APIGatewayProxyRequest req)
     {
-        var userId = GetUserId(req); if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+        var userId = GetUserId(req);
+        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
         var username   = GetSegment(req.Path, 2);
         var cognito    = new Amazon.CognitoIdentityProvider.AmazonCognitoIdentityProviderClient();
         var userPoolId = Environment.GetEnvironmentVariable("COGNITO_USER_POOL_ID") ?? "";
@@ -424,7 +447,8 @@ public class EventsHandler
 
     private async Task<APIGatewayProxyResponse> DeleteUser(APIGatewayProxyRequest req)
     {
-        var userId = GetUserId(req); if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+        var userId = GetUserId(req);
+        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
         var username   = GetSegment(req.Path, 2);
         var cognito    = new Amazon.CognitoIdentityProvider.AmazonCognitoIdentityProviderClient();
         var userPoolId = Environment.GetEnvironmentVariable("COGNITO_USER_POOL_ID") ?? "";
@@ -433,60 +457,117 @@ public class EventsHandler
     }
 
     // ── Email template ────────────────────────────────────────────────────────
+    // Consistent with the RSVP/microsite page (#0a0a12 dark bg, #6366F1 brand,
+    // and the same tone as the WhatsApp blast: "You're invited! [title] [date] [location] RSVP here"
 
-    private static string BuildEmailHtml(string name, string title, string date, string location, string rsvpUrl) => $@"
-<!DOCTYPE html>
-<html>
+    private static string BuildEmailHtml(
+        string name, string title, string date, string location, string organizer, string rsvpUrl)
+    {
+        var locationRow = string.IsNullOrEmpty(location) ? "" : $@"
+        <tr>
+          <td width='32' valign='top' style='font-size:18px;padding-bottom:14px'>&#128205;</td>
+          <td style='padding-bottom:14px'>
+            <div style='font-size:11px;color:#4b5563;text-transform:uppercase;letter-spacing:0.08em;font-family:Helvetica,Arial,sans-serif;margin-bottom:3px'>Location</div>
+            <div style='font-size:15px;color:#e5e7eb;font-weight:500;font-family:Helvetica,Arial,sans-serif'>{location}</div>
+          </td>
+        </tr>";
+
+        var organizerLine = string.IsNullOrEmpty(organizer) ? "" : $@"
+        <p style='font-size:13px;color:#6b7280;margin:0 0 24px 0;font-family:Helvetica,Arial,sans-serif'>
+          Hosted by <span style='color:#a5b4fc'>{organizer}</span>
+        </p>";
+
+        return $@"<!DOCTYPE html>
+<html lang='en'>
 <head>
   <meta charset='utf-8'>
-  <meta name='viewport' content='width=device-width, initial-scale=1'>
-  <style>
-    body{{margin:0;padding:0;background:#08080f;font-family:Georgia,serif;color:#fff}}
-    .wrap{{max-width:560px;margin:0 auto;padding:32px 16px}}
-    .badge{{display:inline-flex;align-items:center;gap:8px;padding:6px 16px;background:rgba(79,111,191,0.1);border:1px solid rgba(79,111,191,0.25);border-radius:20px;margin-bottom:28px}}
-    .title{{font-size:28px;font-weight:700;color:#fff;margin-bottom:8px;line-height:1.2}}
-    .card{{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:24px;margin-bottom:24px}}
-    .row{{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px}}
-    .lbl{{font-size:12px;color:#666;margin-bottom:2px}}
-    .val{{font-size:15px;color:#fff;font-weight:500}}
-    .cta{{display:inline-block;background:#4F6FBF;color:#fff;text-decoration:none;padding:16px 40px;border-radius:10px;font-size:16px;font-weight:600;letter-spacing:0.5px}}
-    .footer{{text-align:center;font-size:11px;color:rgba(255,255,255,0.15);margin-top:32px;font-family:Helvetica,sans-serif}}
-  </style>
+  <meta name='viewport' content='width=device-width,initial-scale=1'>
+  <title>You're invited: {title}</title>
 </head>
-<body>
-  <div class='wrap'>
-    <div style='text-align:center;margin-bottom:28px'>
-      <div class='badge'>
-        <img src='https://eventcraft.irotte.com/favicon.svg' width='16' height='16' alt='' style='vertical-align:middle'/>
-        <span style='font-size:12px;color:#4F6FBF;font-weight:600;letter-spacing:0.5px'>EventCraft</span>
+<body style='margin:0;padding:0;background:#0a0a12;font-family:Georgia,serif;color:#f9fafb'>
+  <div style='max-width:560px;margin:0 auto;padding:40px 24px'>
+
+    <!-- Logo badge — inline SVG, no external images, renders everywhere -->
+    <div style='text-align:center;margin-bottom:36px'>
+      <div style='display:inline-block;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);border-radius:20px;padding:10px 20px'>
+        <svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 100 100'
+             style='vertical-align:middle;margin-right:8px'>
+          <ellipse cx='50' cy='50' rx='11' ry='26' fill='#4F46E5' transform='rotate(0 50 50)'/>
+          <ellipse cx='50' cy='50' rx='11' ry='26' fill='#6366F1' transform='rotate(45 50 50)'/>
+          <ellipse cx='50' cy='50' rx='11' ry='26' fill='#4F46E5' transform='rotate(90 50 50)'/>
+          <ellipse cx='50' cy='50' rx='11' ry='26' fill='#6366F1' transform='rotate(135 50 50)'/>
+          <ellipse cx='50' cy='50' rx='11' ry='26' fill='#4F46E5' transform='rotate(180 50 50)'/>
+          <ellipse cx='50' cy='50' rx='11' ry='26' fill='#6366F1' transform='rotate(225 50 50)'/>
+          <ellipse cx='50' cy='50' rx='11' ry='26' fill='#4F46E5' transform='rotate(270 50 50)'/>
+          <ellipse cx='50' cy='50' rx='11' ry='26' fill='#6366F1' transform='rotate(315 50 50)'/>
+          <circle cx='50' cy='50' r='13' fill='#D4AF37'/>
+          <circle cx='50' cy='50' r='7' fill='#F5CC50'/>
+        </svg>
+        <span style='font-family:Georgia,serif;font-size:18px;font-weight:700;color:#ffffff;vertical-align:middle'>
+          event<span style='color:#D4AF37'>craft</span>
+        </span>
       </div>
     </div>
-    <p style='font-size:15px;color:#aaa;margin-bottom:16px'>Dear {name},</p>
-    <h1 class='title'>{title}</h1>
-    <p style='font-size:15px;color:#aaa;line-height:1.7;margin-bottom:24px'>You have been cordially invited to this special occasion.</p>
-    <div class='card'>
-      <div class='row'>
-        <span style='font-size:18px'>📅</span>
-        <div><div class='lbl'>Date &amp; Time</div><div class='val'>{date}</div></div>
-      </div>
-      {(string.IsNullOrEmpty(location) ? "" : $"<div class=\"row\"><span style=\"font-size:18px\">📍</span><div><div class=\"lbl\">Location</div><div class=\"val\">{location}</div></div></div>")}
-    </div>
-    <div style='text-align:center;margin:28px 0'>
-      <a href='{rsvpUrl}' class='cta'>RSVP Now</a>
-    </div>
-    <p style='text-align:center;font-size:12px;color:#555;margin-top:12px'>
-      Or open: <a href='{rsvpUrl}' style='color:#4F6FBF'>{rsvpUrl}</a>
+
+    <!-- Eyebrow -->
+    <p style='text-align:center;font-size:12px;color:#6366F1;text-transform:uppercase;letter-spacing:0.12em;margin:0 0 16px 0;font-family:Helvetica,Arial,sans-serif;font-weight:600'>
+      You are cordially invited
     </p>
-    <div class='footer'>
-      <p>Powered by EventCraft &middot; eventcraft.irotte.com</p>
-      <p style='margin-top:4px'>If you did not expect this, you may ignore this email.</p>
+
+    <!-- Greeting -->
+    <p style='font-size:15px;color:#9ca3af;margin:0 0 12px 0;font-family:Helvetica,Arial,sans-serif'>
+      Dear {name},
+    </p>
+
+    <!-- Event title -->
+    <h1 style='font-size:32px;font-weight:700;color:#ffffff;margin:0 0 8px 0;line-height:1.2;font-family:Georgia,serif'>
+      {title}
+    </h1>
+
+    {organizerLine}
+
+    <!-- Gold divider -->
+    <div style='height:1px;background:rgba(212,175,55,0.35);margin-bottom:24px'></div>
+
+    <!-- Event details card -->
+    <div style='background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:20px 24px;margin-bottom:28px'>
+      <table width='100%' cellpadding='0' cellspacing='0' border='0'>
+        <tr>
+          <td width='32' valign='top' style='font-size:18px;padding-bottom:14px'>&#128197;</td>
+          <td style='padding-bottom:14px'>
+            <div style='font-size:11px;color:#4b5563;text-transform:uppercase;letter-spacing:0.08em;font-family:Helvetica,Arial,sans-serif;margin-bottom:3px'>Date</div>
+            <div style='font-size:15px;color:#e5e7eb;font-weight:500;font-family:Helvetica,Arial,sans-serif'>{date}</div>
+          </td>
+        </tr>
+        {locationRow}
+      </table>
     </div>
+
+    <!-- CTA button -->
+    <div style='text-align:center;margin-bottom:16px'>
+      <a href='{rsvpUrl}'
+         style='display:inline-block;background:#6366F1;color:#ffffff;text-decoration:none;padding:16px 52px;border-radius:12px;font-size:16px;font-weight:700;letter-spacing:0.04em;font-family:Helvetica,Arial,sans-serif'>
+        RSVP Now
+      </a>
+    </div>
+    <p style='text-align:center;font-size:12px;color:#374151;margin:0 0 36px 0;font-family:Helvetica,Arial,sans-serif'>
+      Or visit: <a href='{rsvpUrl}' style='color:#6366F1;word-break:break-all'>{rsvpUrl}</a>
+    </p>
+
+    <!-- Footer -->
+    <div style='border-top:1px solid rgba(255,255,255,0.06);padding-top:20px;text-align:center'>
+      <p style='font-size:11px;color:rgba(255,255,255,0.18);margin:0 0 4px 0;font-family:Helvetica,Arial,sans-serif'>
+        Powered by <span style='color:rgba(212,175,55,0.45)'>EventCraft</span> &middot; eventcraft.irotte.com
+      </p>
+      <p style='font-size:11px;color:rgba(255,255,255,0.1);margin:0;font-family:Helvetica,Arial,sans-serif'>
+        If you did not expect this invitation, you may safely ignore this email.
+      </p>
+    </div>
+
   </div>
 </body>
 </html>";
-
-
-    private static void context_log(string msg) => Console.WriteLine(msg);
+    }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -509,14 +590,16 @@ public class EventsHandler
 
     private static string? GetUserId(APIGatewayProxyRequest req)
     {
-        try {
+        try
+        {
             if (req.RequestContext?.Authorizer == null) return null;
             if (req.RequestContext.Authorizer.TryGetValue("claims", out var claims) &&
                 claims is System.Text.Json.JsonElement el &&
                 el.TryGetProperty("sub", out var sub))
                 return sub.GetString();
             return null;
-        } catch { return null; }
+        }
+        catch { return null; }
     }
 
     private static string GetSegment(string path, int index)

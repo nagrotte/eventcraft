@@ -1,4 +1,31 @@
-﻿using Amazon.DynamoDBv2;
+param(
+    [switch]$SkipBackend,
+    [switch]$SkipFrontend,
+    [switch]$PatchOnly
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+$Profile     = "eventcraft-dev"
+$Region      = "us-east-1"
+$Env         = "staging"
+$ProjectRoot = "D:\Projects\eventcraft"
+$ApiRoot     = "$ProjectRoot\apps\api\EventCraft.Events"
+$WebRoot     = "$ProjectRoot\apps\web"
+$SamConfig   = "$ProjectRoot\samconfig.toml"
+$ApiBase     = "https://k08tavl4m4.execute-api.$Region.amazonaws.com"
+$Table       = "eventcraft-staging"
+
+function Step([string]$msg) { Write-Host "" ; Write-Host "-- $msg" -ForegroundColor Cyan }
+function Ok([string]$msg)   { Write-Host "   OK: $msg" -ForegroundColor Green }
+function Fail([string]$msg) { Write-Host "   FAIL: $msg" -ForegroundColor Red; exit 1 }
+
+# ── Write DynamoEventRepository.cs ───────────────────────────────────────────
+Step "Writing source files"
+
+Set-Content -Path "$ApiRoot\Repositories\DynamoEventRepository.cs" -Encoding UTF8 -Value @'
+using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
 using EventCraft.Events.Models;
 using Microsoft.Extensions.Logging;
@@ -306,3 +333,182 @@ public class DynamoEventRepository : IEventRepository
         return item;
     }
 }
+'@
+Ok "DynamoEventRepository.cs written"
+
+Set-Content -Path "$ApiRoot\Commands\PublishEventCommand.cs" -Encoding UTF8 -Value @'
+using EventCraft.Events.Models;
+using EventCraft.Events.Repositories;
+using MediatR;
+using Microsoft.Extensions.Logging;
+
+namespace EventCraft.Events.Commands;
+
+public record PublishEventCommand(string EventId, string UserId, string MicrositeSlug) : IRequest<EventEntity?>;
+
+public class PublishEventCommandHandler : IRequestHandler<PublishEventCommand, EventEntity?>
+{
+    private readonly IEventRepository                    _repo;
+    private readonly ILogger<PublishEventCommandHandler> _log;
+
+    public PublishEventCommandHandler(IEventRepository repo, ILogger<PublishEventCommandHandler> log)
+    { _repo = repo; _log = log; }
+
+    public async Task<EventEntity?> Handle(PublishEventCommand cmd, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(cmd.MicrositeSlug))
+        {
+            _log.LogWarning("Publish rejected - missing slug for {EventId}", cmd.EventId);
+            return null;
+        }
+
+        var entity = await _repo.GetByIdAsync(cmd.EventId, ct);
+        if (entity is null)
+        {
+            _log.LogWarning("Publish rejected - event not found: {EventId}", cmd.EventId);
+            return null;
+        }
+
+        if (entity.UserId != cmd.UserId)
+        {
+            _log.LogWarning("Publish rejected - ownership mismatch for {EventId}", cmd.EventId);
+            return null;
+        }
+
+        entity.Status        = "published";
+        entity.MicrositeSlug = cmd.MicrositeSlug.ToLowerInvariant().Trim();
+
+        return await _repo.UpdateAsync(entity, ct);
+    }
+}
+'@
+Ok "PublishEventCommand.cs written"
+
+# ── Patch existing events missing GSI2SK ─────────────────────────────────────
+Step "Patching DynamoDB — adding GSI2SK to events missing it"
+
+$scanJson = aws dynamodb scan `
+    --table-name $Table `
+    --region $Region `
+    --profile $Profile `
+    --filter-expression "attribute_exists(GSI2PK) AND attribute_not_exists(GSI2SK) AND SK = :sk" `
+    --expression-attribute-values '{\":sk\":{\"S\":\"METADATA\"}}' `
+    --projection-expression "PK, eventId, GSI2PK" `
+    --output json
+
+$scanResult = $scanJson | ConvertFrom-Json
+$items = $scanResult.Items
+
+Write-Host "   Found $($items.Count) event(s) missing GSI2SK" -ForegroundColor Yellow
+
+foreach ($item in $items) {
+    $pk      = $item.PK.S
+    $eventId = $item.eventId.S
+    $gsi2sk  = "EVENT#$eventId"
+
+    Write-Host "   Patching $eventId ..."
+
+    aws dynamodb update-item `
+        --table-name $Table `
+        --region $Region `
+        --profile $Profile `
+        --key "{`"PK`":{`"S`":`"$pk`"},`"SK`":{`"S`":`"METADATA`"}}" `
+        --update-expression "SET GSI2SK = :sk" `
+        --expression-attribute-values "{`":sk`":{`"S`":`"$gsi2sk`"}}" `
+        --output json | Out-Null
+
+    Ok "$eventId patched"
+}
+
+if ($items.Count -eq 0) { Ok "All events already have GSI2SK - nothing to patch" }
+
+if ($PatchOnly) {
+    Write-Host ""
+    Write-Host "Patch-only complete." -ForegroundColor Cyan
+    exit 0
+}
+
+# ── Build + Deploy ────────────────────────────────────────────────────────────
+if (-not $SkipBackend) {
+
+    Step "dotnet build"
+    Push-Location "$ProjectRoot\apps\api"
+    dotnet build --configuration Release --nologo -v quiet
+    if ($LASTEXITCODE -ne 0) { Pop-Location; Fail "dotnet build failed" }
+    Ok "Build succeeded"
+    Pop-Location
+
+    Step "SAM build"
+    Push-Location $ProjectRoot
+    sam build --config-env $Env --config-file $SamConfig
+    if ($LASTEXITCODE -ne 0) { Pop-Location; Fail "sam build failed" }
+    Ok "SAM build complete"
+    Pop-Location
+
+    Step "SAM deploy"
+    Push-Location $ProjectRoot
+    sam deploy `
+        --config-env  $Env `
+        --config-file $SamConfig `
+        --no-confirm-changeset `
+        --no-fail-on-empty-changeset
+    if ($LASTEXITCODE -ne 0) { Pop-Location; Fail "sam deploy failed" }
+    Ok "Lambdas deployed"
+    Pop-Location
+
+    Step "Lambda status"
+    foreach ($fn in @("eventcraft-events-$Env", "eventcraft-design-$Env")) {
+        $state = aws lambda get-function-configuration `
+            --function-name $fn --region $Region --profile $Profile `
+            --query "State" --output text 2>$null
+        Ok "$fn => $state"
+    }
+}
+
+if (-not $SkipFrontend) {
+
+    Step "Frontend build + deploy"
+    Push-Location $WebRoot
+    npm ci --silent
+    if ($LASTEXITCODE -ne 0) { Pop-Location; Fail "npm ci failed" }
+    npm run build
+    if ($LASTEXITCODE -ne 0) { Pop-Location; Fail "Next.js build failed" }
+    Ok "Frontend built"
+    Pop-Location
+
+    if (Get-Command "vercel" -ErrorAction SilentlyContinue) {
+        Push-Location $WebRoot
+        vercel deploy --prod
+        if ($LASTEXITCODE -ne 0) { Pop-Location; Fail "Vercel deploy failed" }
+        Ok "Frontend deployed to Vercel"
+        Pop-Location
+    } else {
+        Write-Host "   Vercel CLI not found - push to git to trigger auto-deploy" -ForegroundColor Yellow
+    }
+}
+
+# ── Smoke tests ───────────────────────────────────────────────────────────────
+Step "Smoke tests"
+
+try {
+    Invoke-RestMethod -Uri "$ApiBase/health" -Method GET -UseBasicParsing | Out-Null
+    Ok "Health check passed"
+} catch {
+    Write-Host "   WARNING: Health check failed: $_" -ForegroundColor Yellow
+}
+
+try {
+    $micro = Invoke-RestMethod -Uri "$ApiBase/events/slug/test/public" -Method GET -UseBasicParsing
+    if ($micro.success) { Ok "Microsite /events/slug/test/public => 200" }
+    else { Write-Host "   WARNING: Microsite returned success=false" -ForegroundColor Yellow }
+} catch {
+    Write-Host "   WARNING: Microsite smoke test failed: $_" -ForegroundColor Yellow
+}
+
+Write-Host ""
+Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "  EventCraft staging deploy complete"       -ForegroundColor Cyan
+Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "  API:      $ApiBase"
+Write-Host "  Frontend: https://eventcraft.irotte.com"
+Write-Host ""
