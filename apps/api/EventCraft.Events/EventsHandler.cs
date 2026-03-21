@@ -115,12 +115,12 @@ public class EventsHandler
         }
     }
 
-    // ── Health ────────────────────────────────────────────────────────────────
+    // â”€â”€ Health â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private static APIGatewayProxyResponse Health()
         => OkResponse(new { status = "ok", service = "eventcraft-events", timestamp = DateTime.UtcNow.ToString("O") });
 
-    // ── Contacts ──────────────────────────────────────────────────────────────
+    // â”€â”€ Contacts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private async Task<APIGatewayProxyResponse> ListContacts(APIGatewayProxyRequest req)
     {
@@ -153,7 +153,7 @@ public class EventsHandler
         return new APIGatewayProxyResponse { StatusCode = 204, Headers = CorsHeaders() };
     }
 
-    // ── Email invites ─────────────────────────────────────────────────────────
+    // â”€â”€ Email invites â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private async Task<APIGatewayProxyResponse> SendEmailInvites(APIGatewayProxyRequest req)
     {
@@ -180,7 +180,7 @@ public class EventsHandler
             : $"{appUrl}/rsvp/{eventId}";
 
         var formattedDate = DateTime.TryParse(ev.EventDate, out var dt)
-            ? dt.ToString("dddd, MMMM d, yyyy")
+            ? dt.ToString("dddd, MMMM d, yyyy \a\t h:mm tt")
             : ev.EventDate;
 
         var sent   = new List<string>();
@@ -194,17 +194,22 @@ public class EventsHandler
                 formattedDate,
                 ev.Location ?? "",
                 ev.OrganizerName ?? "",
+                ev.OrganizerPhone ?? "",
+                ev.OrganizerEmail ?? "",
                 rsvpUrl);
 
             try
             {
+                var fromName = !string.IsNullOrEmpty(ev.OrganizerName)
+                    ? ev.OrganizerName
+                    : "EventCraft";
                 await ses.SendEmailAsync(new SendEmailRequest
                 {
-                    Source      = "noreply@pragmaticconsulting.net",
+                    Source      = $"{fromName} <noreply@pragmaticconsulting.net>",
                     Destination = new Destination { ToAddresses = new List<string> { contact.Email! } },
                     Message     = new Message
                     {
-                        Subject = new Content($"You're invited: {ev.Title}"),
+                        Subject = new Content($"You're invited to {ev.Title}"),
                         Body    = new Body { Html = new Content(html) }
                     }
                 });
@@ -220,7 +225,7 @@ public class EventsHandler
         return OkResponse(ApiResponse<object>.Ok(new { sent, failed, total = targets.Count }));
     }
 
-    // ── Events ────────────────────────────────────────────────────────────────
+    // â”€â”€ Events â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private async Task<APIGatewayProxyResponse> CreateEvent(APIGatewayProxyRequest req)
     {
@@ -395,7 +400,7 @@ public class EventsHandler
         return OkResponse(ApiResponse<object>.Ok(rsvps));
     }
 
-    // ── Admin ─────────────────────────────────────────────────────────────────
+    // â”€â”€ Admin â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private async Task<APIGatewayProxyResponse> ListUsers(APIGatewayProxyRequest req)
     {
@@ -456,25 +461,44 @@ public class EventsHandler
         return OkResponse(ApiResponse<object>.Ok(new { success = true }));
     }
 
-    // ── Email template ────────────────────────────────────────────────────────
-    // Consistent with the RSVP/microsite page (#0a0a12 dark bg, #6366F1 brand,
-    // and the same tone as the WhatsApp blast: "You're invited! [title] [date] [location] RSVP here"
+    // â”€â”€ Email template â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Design principle: feels like a personal invitation from the host,
+    // not a product advertisement. EventCraft is mentioned only in the footer.
+    // Host name is prominent. Event details are the hero.
 
     private static string BuildEmailHtml(
-        string name, string title, string date, string location, string organizer, string rsvpUrl)
+        string guestName,
+        string title,
+        string date,
+        string location,
+        string organizer,
+        string organizerPhone,
+        string organizerEmail,
+        string rsvpUrl)
     {
         var locationRow = string.IsNullOrEmpty(location) ? "" : $@"
         <tr>
-          <td width='32' valign='top' style='font-size:18px;padding-bottom:14px'>&#128205;</td>
-          <td style='padding-bottom:14px'>
-            <div style='font-size:11px;color:#4b5563;text-transform:uppercase;letter-spacing:0.08em;font-family:Helvetica,Arial,sans-serif;margin-bottom:3px'>Location</div>
-            <div style='font-size:15px;color:#e5e7eb;font-weight:500;font-family:Helvetica,Arial,sans-serif'>{location}</div>
+          <td width='28' valign='top' style='padding-top:2px;font-size:16px'>&#128205;</td>
+          <td style='padding-bottom:12px'>
+            <div style='font-size:13px;color:#d1d5db;font-family:Helvetica,Arial,sans-serif'>{location}</div>
           </td>
         </tr>";
 
-        var organizerLine = string.IsNullOrEmpty(organizer) ? "" : $@"
-        <p style='font-size:13px;color:#6b7280;margin:0 0 24px 0;font-family:Helvetica,Arial,sans-serif'>
-          Hosted by <span style='color:#a5b4fc'>{organizer}</span>
+        var contactRow = "";
+        if (!string.IsNullOrEmpty(organizerPhone) || !string.IsNullOrEmpty(organizerEmail))
+        {
+            var contactParts = new List<string>();
+            if (!string.IsNullOrEmpty(organizerPhone)) contactParts.Add(organizerPhone);
+            if (!string.IsNullOrEmpty(organizerEmail)) contactParts.Add(organizerEmail);
+            contactRow = $@"
+        <p style='font-size:12px;color:#6b7280;margin:0 0 20px 0;font-family:Helvetica,Arial,sans-serif'>
+          Questions? Reach out: {string.Join(" &middot; ", contactParts)}
+        </p>";
+        }
+
+        var hostLine = string.IsNullOrEmpty(organizer) ? "" :
+            $@"<p style='font-size:14px;color:#9ca3af;margin:0 0 24px 0;font-family:Helvetica,Arial,sans-serif'>
+          Hosted by <span style='color:#e5e7eb;font-weight:500'>{organizer}</span>
         </p>";
 
         return $@"<!DOCTYPE html>
@@ -482,85 +506,58 @@ public class EventsHandler
 <head>
   <meta charset='utf-8'>
   <meta name='viewport' content='width=device-width,initial-scale=1'>
-  <title>You're invited: {title}</title>
+  <title>{title}</title>
 </head>
-<body style='margin:0;padding:0;background:#0a0a12;font-family:Georgia,serif;color:#f9fafb'>
-  <div style='max-width:560px;margin:0 auto;padding:40px 24px'>
+<body style='margin:0;padding:0;background:#111827;font-family:Georgia,serif;color:#f9fafb'>
+  <div style='max-width:520px;margin:0 auto;padding:48px 28px 32px'>
 
-    <!-- Logo badge — inline SVG, no external images, renders everywhere -->
-    <div style='text-align:center;margin-bottom:36px'>
-      <div style='display:inline-block;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);border-radius:20px;padding:10px 20px'>
-        <svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 100 100'
-             style='vertical-align:middle;margin-right:8px'>
-          <ellipse cx='50' cy='50' rx='11' ry='26' fill='#4F46E5' transform='rotate(0 50 50)'/>
-          <ellipse cx='50' cy='50' rx='11' ry='26' fill='#6366F1' transform='rotate(45 50 50)'/>
-          <ellipse cx='50' cy='50' rx='11' ry='26' fill='#4F46E5' transform='rotate(90 50 50)'/>
-          <ellipse cx='50' cy='50' rx='11' ry='26' fill='#6366F1' transform='rotate(135 50 50)'/>
-          <ellipse cx='50' cy='50' rx='11' ry='26' fill='#4F46E5' transform='rotate(180 50 50)'/>
-          <ellipse cx='50' cy='50' rx='11' ry='26' fill='#6366F1' transform='rotate(225 50 50)'/>
-          <ellipse cx='50' cy='50' rx='11' ry='26' fill='#4F46E5' transform='rotate(270 50 50)'/>
-          <ellipse cx='50' cy='50' rx='11' ry='26' fill='#6366F1' transform='rotate(315 50 50)'/>
-          <circle cx='50' cy='50' r='13' fill='#D4AF37'/>
-          <circle cx='50' cy='50' r='7' fill='#F5CC50'/>
-        </svg>
-        <span style='font-family:Georgia,serif;font-size:18px;font-weight:700;color:#ffffff;vertical-align:middle'>
-          event<span style='color:#D4AF37'>craft</span>
-        </span>
-      </div>
-    </div>
-
-    <!-- Eyebrow -->
-    <p style='text-align:center;font-size:12px;color:#6366F1;text-transform:uppercase;letter-spacing:0.12em;margin:0 0 16px 0;font-family:Helvetica,Arial,sans-serif;font-weight:600'>
-      You are cordially invited
+    <!-- Personal greeting â€” no branding here -->
+    <p style='font-size:15px;color:#9ca3af;margin:0 0 8px 0;font-family:Helvetica,Arial,sans-serif'>
+      Dear {guestName},
+    </p>
+    <p style='font-size:15px;color:#d1d5db;margin:0 0 32px 0;font-family:Helvetica,Arial,sans-serif;line-height:1.6'>
+      You have been cordially invited to join us for a special occasion.
     </p>
 
-    <!-- Greeting -->
-    <p style='font-size:15px;color:#9ca3af;margin:0 0 12px 0;font-family:Helvetica,Arial,sans-serif'>
-      Dear {name},
-    </p>
-
-    <!-- Event title -->
-    <h1 style='font-size:32px;font-weight:700;color:#ffffff;margin:0 0 8px 0;line-height:1.2;font-family:Georgia,serif'>
+    <!-- Event title â€” the hero -->
+    <h1 style='font-size:34px;font-weight:700;color:#ffffff;margin:0 0 6px 0;line-height:1.2;font-family:Georgia,serif;letter-spacing:-0.02em'>
       {title}
     </h1>
 
-    {organizerLine}
+    {hostLine}
 
-    <!-- Gold divider -->
-    <div style='height:1px;background:rgba(212,175,55,0.35);margin-bottom:24px'></div>
+    <!-- Thin gold divider -->
+    <div style='height:1px;background:rgba(212,175,55,0.4);margin-bottom:24px'></div>
 
-    <!-- Event details card -->
-    <div style='background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:20px 24px;margin-bottom:28px'>
-      <table width='100%' cellpadding='0' cellspacing='0' border='0'>
-        <tr>
-          <td width='32' valign='top' style='font-size:18px;padding-bottom:14px'>&#128197;</td>
-          <td style='padding-bottom:14px'>
-            <div style='font-size:11px;color:#4b5563;text-transform:uppercase;letter-spacing:0.08em;font-family:Helvetica,Arial,sans-serif;margin-bottom:3px'>Date</div>
-            <div style='font-size:15px;color:#e5e7eb;font-weight:500;font-family:Helvetica,Arial,sans-serif'>{date}</div>
-          </td>
-        </tr>
-        {locationRow}
-      </table>
-    </div>
+    <!-- Event details â€” clean, no card borders -->
+    <table width='100%' cellpadding='0' cellspacing='0' border='0' style='margin-bottom:8px'>
+      <tr>
+        <td width='28' valign='top' style='padding-top:2px;font-size:16px'>&#128197;</td>
+        <td style='padding-bottom:12px'>
+          <div style='font-size:13px;color:#d1d5db;font-family:Helvetica,Arial,sans-serif'>{date}</div>
+        </td>
+      </tr>
+      {locationRow}
+    </table>
 
-    <!-- CTA button -->
-    <div style='text-align:center;margin-bottom:16px'>
+    {contactRow}
+
+    <!-- RSVP button â€” warm, not corporate -->
+    <div style='margin:28px 0 20px'>
       <a href='{rsvpUrl}'
-         style='display:inline-block;background:#6366F1;color:#ffffff;text-decoration:none;padding:16px 52px;border-radius:12px;font-size:16px;font-weight:700;letter-spacing:0.04em;font-family:Helvetica,Arial,sans-serif'>
-        RSVP Now
+         style='display:inline-block;background:#4F46E5;color:#ffffff;text-decoration:none;padding:14px 44px;border-radius:8px;font-size:15px;font-weight:600;font-family:Helvetica,Arial,sans-serif;letter-spacing:0.02em'>
+        RSVP
       </a>
     </div>
-    <p style='text-align:center;font-size:12px;color:#374151;margin:0 0 36px 0;font-family:Helvetica,Arial,sans-serif'>
-      Or visit: <a href='{rsvpUrl}' style='color:#6366F1;word-break:break-all'>{rsvpUrl}</a>
+
+    <p style='font-size:12px;color:#374151;margin:0 0 40px 0;font-family:Helvetica,Arial,sans-serif'>
+      <a href='{rsvpUrl}' style='color:#6366F1'>{rsvpUrl}</a>
     </p>
 
-    <!-- Footer -->
-    <div style='border-top:1px solid rgba(255,255,255,0.06);padding-top:20px;text-align:center'>
-      <p style='font-size:11px;color:rgba(255,255,255,0.18);margin:0 0 4px 0;font-family:Helvetica,Arial,sans-serif'>
-        Powered by <span style='color:rgba(212,175,55,0.45)'>EventCraft</span> &middot; eventcraft.irotte.com
-      </p>
-      <p style='font-size:11px;color:rgba(255,255,255,0.1);margin:0;font-family:Helvetica,Arial,sans-serif'>
-        If you did not expect this invitation, you may safely ignore this email.
+    <!-- Footer â€” EventCraft credit, very subtle -->
+    <div style='border-top:1px solid rgba(255,255,255,0.05);padding-top:16px'>
+      <p style='font-size:11px;color:rgba(255,255,255,0.15);margin:0;font-family:Helvetica,Arial,sans-serif'>
+        Sent via <span style='color:rgba(255,255,255,0.25)'>eventcraft</span> &middot; If you did not expect this, you may safely ignore it.
       </p>
     </div>
 
@@ -569,7 +566,7 @@ public class EventsHandler
 </html>";
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private static APIGatewayProxyResponse OkResponse(object data, int statusCode = 200)
         => new() { StatusCode = statusCode, Headers = CorsHeaders(), Body = JsonSerializer.Serialize(data, _json) };

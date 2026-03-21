@@ -243,7 +243,7 @@ export default function MicrositePage() {
         {event.galleryUrl && (
           <div style={{ background: 'rgba(212,175,55,0.05)', border: '1px solid rgba(212,175,55,0.15)', borderRadius: 16, padding: '20px 28px', marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
             <div>
-              <p style={{ fontSize: 14, fontWeight: 600, color: '#D4AF37', marginBottom: 4 }}>ðŸ“¸ Event Photos</p>
+              <p style={{ fontSize: 14, fontWeight: 600, color: '#D4AF37', marginBottom: 4 }}>📸 Event Photos</p>
               <p style={{ fontSize: 13, color: '#888' }}>View and download photos from this event</p>
             </div>
             <a href={event.galleryUrl} target="_blank" rel="noreferrer"
@@ -294,7 +294,7 @@ export default function MicrositePage() {
 
           {step === 'done' && (
             <div style={{ textAlign: 'center', padding: '16px 0' }}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>{response === 'yes' ? 'ðŸŽ‰' : response === 'no' ? 'ðŸ˜”' : 'ðŸ¤”'}</div>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>{response === 'yes' ? '🎉' : response === 'no' ? '😔' : '🤔'}</div>
               <p style={{ fontSize: 18, fontWeight: 700, color: '#fff', marginBottom: 6 }}>
                 {response === 'yes' ? 'See you there!' : response === 'no' ? "Sorry you can't make it" : "We'll keep a spot for you"}
               </p>
@@ -318,7 +318,7 @@ export default function MicrositePage() {
         </div>
 
         <p style={{ textAlign: 'center', fontSize: 11, color: 'rgba(255,255,255,0.15)', fontFamily: 'Helvetica Neue, sans-serif' }}>
-          Powered by EventCraft Â· eventcraft.irotte.com
+          Powered by EventCraft · eventcraft.irotte.com
         </p>
       </div>
     </div>
