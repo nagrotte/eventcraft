@@ -1,197 +1,176 @@
-'use client';
+﻿'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { Canvas } from 'fabric';
 
-interface TemplateLayer {
-  image:   string;
-  x:       number;
-  y:       number;
-  width:   number;
-  height:  number;
-  zIndex:  number;
-  locked:  boolean;
-}
-
-interface TextZone {
-  x:      number;
-  y:      number;
-  width:  number;
-  height: number;
-}
-
-interface Template {
-  id:           string;
-  name:         string;
-  category:     string;
-  description:  string;
-  bgColor:      string;
-  canvasWidth:  number;
-  canvasHeight: number;
-  layers:       TemplateLayer[];
-  textZones:    TextZone[];
-  thumbImage:   string;
-}
-
 interface TemplatesPanelProps {
-  fabricRef:      React.MutableRefObject<Canvas | null>;
-  eventTitle?:    string;
-  eventDate?:     string;
+  fabricRef:  React.MutableRefObject<Canvas | null>;
+  eventTitle?: string;
+  eventDate?:  string;
   eventLocation?: string;
-  onClose:        () => void;
-  onSave?:        () => Promise<void>;
+  onClose:    () => void;
+  onSave?:    () => Promise<void>;
 }
 
-const TEMPLATES_URL    = 'https://eventcraft-media-staging.s3.amazonaws.com/templates/index.json';
-const TEMPLATES_BASE   = 'https://eventcraft-media-staging.s3.amazonaws.com/templates';
-const CATEGORIES       = ['All', 'South Indian Traditional', 'Hindu Religious', 'Ancient Bharath', 'Festival'];
+const TEMPLATES = [
+  {
+    id: 'royal-gold',
+    name: 'Royal Gold',
+    preview: { bg: '#1a0a00', accent: '#D4AF37' },
+    description: 'Dark royal with gold accents',
+    layout: (title: string, date: string, loc: string) => ({
+      background: '#1a0a00',
+      objects: [
+        { type:'rect', left:0, top:0, width:600, height:850, fill:'#1a0a00', opacity:1 },
+        { type:'rect', left:0, top:0, width:600, height:6, fill:'#D4AF37' },
+        { type:'rect', left:0, top:844, width:600, height:6, fill:'#D4AF37' },
+        { type:'rect', left:40, top:30, width:520, height:1, fill:'#D4AF37', opacity:0.4 },
+        { type:'rect', left:40, top:819, width:520, height:1, fill:'#D4AF37', opacity:0.4 },
+        { type:'text', left:300, top:70, text:'Γ£ª  YOU ARE INVITED  Γ£ª', fontSize:11, fill:'#D4AF37', textAlign:'center', fontFamily:'Georgia, serif' },
+        { type:'text', left:300, top:130, text: title || 'Event Title', fontSize:48, fill:'#FFFFFF', textAlign:'center', fontFamily:'Georgia, serif', fontWeight:'bold' },
+        { type:'rect', left:220, top:210, width:160, height:2, fill:'#D4AF37' },
+        { type:'text', left:300, top:240, text:'Sacred Celebration', fontSize:18, fill:'#D4AF37', textAlign:'center', fontFamily:'Georgia, serif' },
+        { type:'text', left:300, top:660, text: date || 'Date & Time', fontSize:16, fill:'#FFFFFF', textAlign:'center', fontFamily:'Georgia, serif' },
+        { type:'text', left:300, top:688, text: loc || 'Location', fontSize:14, fill:'#D4AF37', textAlign:'center', fontFamily:'Georgia, serif' },
+        { type:'rect', left:200, top:730, width:200, height:44, fill:'#D4AF37', rx:4 },
+        { type:'text', left:300, top:752, text:'RSVP NOW', fontSize:13, fill:'#1a0a00', textAlign:'center', fontFamily:'Georgia, serif', fontWeight:'bold' },
+      ]
+    }),
+  },
+  {
+    id: 'saffron-divine',
+    name: 'Saffron Divine',
+    preview: { bg: '#7B2D00', accent: '#FF8C00' },
+    description: 'Saffron and deep maroon ΓÇö spiritual',
+    layout: (title: string, date: string, loc: string) => ({
+      background: '#4A0000',
+      objects: [
+        { type:'rect', left:0, top:0, width:600, height:850, fill:'#4A0000' },
+        { type:'rect', left:0, top:0, width:600, height:8, fill:'#FF8C00' },
+        { type:'rect', left:0, top:842, width:600, height:8, fill:'#FF8C00' },
+        { type:'rect', left:60, top:60, width:480, height:730, fill:'#000000', opacity:0.2, rx:4 },
+        { type:'text', left:300, top:90, text:'αÑÉ', fontSize:32, fill:'#FF8C00', textAlign:'center', fontFamily:'Noto Serif Devanagari, serif' },
+        { type:'text', left:300, top:150, text: title || 'Event Title', fontSize:44, fill:'#FFF3E0', textAlign:'center', fontFamily:'Noto Serif Devanagari, serif', fontWeight:'bold' },
+        { type:'rect', left:180, top:225, width:240, height:2, fill:'#FF8C00', opacity:0.8 },
+        { type:'text', left:300, top:250, text:'αñ¬αñ╡αñ┐αññαÑìαñ░ αñëαññαÑìαñ╕αñ╡', fontSize:20, fill:'#FF8C00', textAlign:'center', fontFamily:'Noto Serif Devanagari, serif' },
+        { type:'text', left:300, top:660, text: date || 'αñªαñ┐αñ¿αñ╛αñéαñò', fontSize:16, fill:'#FFF3E0', textAlign:'center', fontFamily:'Noto Serif Devanagari, serif' },
+        { type:'text', left:300, top:690, text: loc || 'αñ╕αÑìαñÑαñ╛αñ¿', fontSize:14, fill:'#FF8C00', textAlign:'center', fontFamily:'Noto Serif Devanagari, serif' },
+        { type:'rect', left:200, top:730, width:200, height:44, fill:'#FF8C00', rx:4 },
+        { type:'text', left:300, top:752, text:'RSVP αñòαñ░αÑçαñé', fontSize:13, fill:'#4A0000', textAlign:'center', fontFamily:'Noto Serif Devanagari, serif', fontWeight:'bold' },
+      ]
+    }),
+  },
+  {
+    id: 'floral-blush',
+    name: 'Floral Blush',
+    preview: { bg: '#2d1a1a', accent: '#E8A0A0' },
+    description: 'Romantic blush and rose gold',
+    layout: (title: string, date: string, loc: string) => ({
+      background: '#1a0d0d',
+      objects: [
+        { type:'rect', left:0, top:0, width:600, height:850, fill:'#1a0d0d' },
+        { type:'rect', left:0, top:0, width:600, height:5, fill:'#C4707A' },
+        { type:'rect', left:0, top:845, width:600, height:5, fill:'#C4707A' },
+        { type:'text', left:300, top:65, text:'~ You Are Invited ~', fontSize:13, fill:'#C4707A', textAlign:'center', fontFamily:'Georgia, serif', fontStyle:'italic' },
+        { type:'text', left:300, top:130, text: title || 'Event Title', fontSize:46, fill:'#FFF0F0', textAlign:'center', fontFamily:'Playfair Display, serif', fontWeight:'bold' },
+        { type:'rect', left:240, top:210, width:120, height:1, fill:'#C4707A', opacity:0.8 },
+        { type:'text', left:300, top:230, text:'With Love & Joy', fontSize:16, fill:'#C4707A', textAlign:'center', fontFamily:'Georgia, serif', fontStyle:'italic' },
+        { type:'text', left:300, top:660, text: date || 'Date & Time', fontSize:16, fill:'#FFF0F0', textAlign:'center', fontFamily:'Georgia, serif' },
+        { type:'text', left:300, top:688, text: loc || 'Location', fontSize:14, fill:'#C4707A', textAlign:'center', fontFamily:'Georgia, serif' },
+        { type:'rect', left:200, top:730, width:200, height:44, fill:'#C4707A', rx:22 },
+        { type:'text', left:300, top:752, text:'RSVP', fontSize:13, fill:'#fff', textAlign:'center', fontFamily:'Georgia, serif', fontWeight:'bold' },
+      ]
+    }),
+  },
+  {
+    id: 'midnight-blue',
+    name: 'Midnight Blue',
+    preview: { bg: '#0a0a2e', accent: '#4F8EF7' },
+    description: 'Deep navy ΓÇö modern corporate',
+    layout: (title: string, date: string, loc: string) => ({
+      background: '#050518',
+      objects: [
+        { type:'rect', left:0, top:0, width:600, height:850, fill:'#050518' },
+        { type:'rect', left:0, top:0, width:4, height:850, fill:'#4F8EF7' },
+        { type:'rect', left:596, top:0, width:4, height:850, fill:'#4F8EF7' },
+        { type:'rect', left:40, top:80, width:120, height:3, fill:'#4F8EF7' },
+        { type:'text', left:60, top:110, text:'INVITATION', fontSize:11, fill:'#4F8EF7', fontFamily:'Inter, sans-serif', fontWeight:'bold' },
+        { type:'text', left:60, top:170, text: title || 'Event Title', fontSize:44, fill:'#FFFFFF', fontFamily:'Inter, sans-serif', fontWeight:'bold' },
+        { type:'rect', left:40, top:250, width:520, height:1, fill:'#4F8EF7', opacity:0.3 },
+        { type:'text', left:60, top:660, text: date || 'Date & Time', fontSize:16, fill:'#FFFFFF', fontFamily:'Inter, sans-serif' },
+        { type:'text', left:60, top:686, text: loc || 'Location', fontSize:14, fill:'#4F8EF7', fontFamily:'Inter, sans-serif' },
+        { type:'rect', left:40, top:730, width:180, height:44, fill:'#4F8EF7', rx:4 },
+        { type:'text', left:130, top:752, text:'RSVP', fontSize:13, fill:'#fff', textAlign:'center', fontFamily:'Inter, sans-serif', fontWeight:'bold' },
+      ]
+    }),
+  },
+  {
+    id: 'ivory-classic',
+    name: 'Ivory Classic',
+    preview: { bg: '#F5F0E8', accent: '#8B6914' },
+    description: 'Light ivory ΓÇö elegant print-ready',
+    layout: (title: string, date: string, loc: string) => ({
+      background: '#F5F0E8',
+      objects: [
+        { type:'rect', left:0, top:0, width:600, height:850, fill:'#F5F0E8' },
+        { type:'rect', left:30, top:30, width:540, height:790, fill:'#000000', opacity:0, rx:0 },
+        { type:'rect', left:30, top:30, width:540, height:2, fill:'#8B6914' },
+        { type:'rect', left:30, top:818, width:540, height:2, fill:'#8B6914' },
+        { type:'rect', left:30, top:30, width:2, height:790, fill:'#8B6914' },
+        { type:'rect', left:568, top:30, width:2, height:790, fill:'#8B6914' },
+        { type:'text', left:300, top:75, text:'~ Invitation ~', fontSize:14, fill:'#8B6914', textAlign:'center', fontFamily:'Georgia, serif', fontStyle:'italic' },
+        { type:'text', left:300, top:140, text: title || 'Event Title', fontSize:44, fill:'#1a1a1a', textAlign:'center', fontFamily:'Playfair Display, serif', fontWeight:'bold' },
+        { type:'rect', left:220, top:220, width:160, height:1, fill:'#8B6914' },
+        { type:'text', left:300, top:240, text:'cordially invites you', fontSize:16, fill:'#555555', textAlign:'center', fontFamily:'Georgia, serif', fontStyle:'italic' },
+        { type:'text', left:300, top:660, text: date || 'Date & Time', fontSize:16, fill:'#1a1a1a', textAlign:'center', fontFamily:'Georgia, serif' },
+        { type:'text', left:300, top:688, text: loc || 'Location', fontSize:14, fill:'#8B6914', textAlign:'center', fontFamily:'Georgia, serif' },
+        { type:'rect', left:200, top:730, width:200, height:44, fill:'#8B6914', rx:2 },
+        { type:'text', left:300, top:752, text:'RSVP', fontSize:13, fill:'#fff', textAlign:'center', fontFamily:'Georgia, serif', fontWeight:'bold' },
+      ]
+    }),
+  },
+];
 
 export function TemplatesPanel({ fabricRef, eventTitle, eventDate, eventLocation, onClose, onSave }: TemplatesPanelProps) {
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [loading,   setLoading]   = useState(true);
-  const [applying,  setApplying]  = useState<string | null>(null);
-  const [activeCat, setActiveCat] = useState('All');
-  const [error,     setError]     = useState('');
-
-  useEffect(() => {
-    fetch(TEMPLATES_URL + '?t=' + Date.now())
-      .then(r => r.json())
-      .then(d => setTemplates(d.templates ?? []))
-      .catch(() => setError('Could not load templates — check S3 bucket is public'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const filtered = activeCat === 'All'
-    ? templates
-    : templates.filter(t => t.category === activeCat);
+  const [applying, setApplying] = useState<string | null>(null);
 
   const formattedDate = eventDate
     ? new Date(eventDate).toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' })
     : '';
 
-  async function applyTemplate(t: Template) {
+  async function applyTemplate(template: typeof TEMPLATES[0]) {
     const canvas = fabricRef.current;
     if (!canvas) return;
-    setApplying(t.id);
+    setApplying(template.id);
 
     try {
-      const { FabricImage, IText, Rect } = await import('fabric');
-
-      // Resize canvas if template has different dimensions
-      if (t.canvasWidth !== canvas.width || t.canvasHeight !== canvas.height) {
-        canvas.setWidth(t.canvasWidth);
-        canvas.setHeight(t.canvasHeight);
-      }
+      const { Rect, IText } = await import('fabric');
+      const layout = template.layout(eventTitle ?? '', formattedDate, eventLocation ?? '');
 
       canvas.clear();
-      canvas.backgroundColor = t.bgColor;
+      canvas.backgroundColor = layout.background;
 
-      // Sort layers by zIndex
-      const sortedLayers = [...t.layers].sort((a, b) => a.zIndex - b.zIndex);
-
-      // Place each layer image
-      for (const layer of sortedLayers) {
-        const imageUrl = `${TEMPLATES_BASE}/${t.id}/${layer.image}`;
-        try {
-          const img = await FabricImage.fromURL(imageUrl, { crossOrigin: 'anonymous' });
-          const scaleX = layer.width  / img.width!;
-          const scaleY = layer.height / img.height!;
-          img.set({
-            left:       layer.x,
-            top:        layer.y,
-            scaleX,
-            scaleY,
-            selectable: !layer.locked,
-            evented:    !layer.locked,
-            lockMovementX: layer.locked,
-            lockMovementY: layer.locked,
+      for (const obj of layout.objects) {
+        let fabricObj: any = null;
+        if (obj.type === 'rect') {
+          fabricObj = new Rect({
+            left: obj.left, top: obj.top, width: obj.width, height: obj.height,
+            fill: obj.fill, rx: (obj as any).rx ?? 0, ry: (obj as any).rx ?? 0,
+            opacity: (obj as any).opacity ?? 1,
           });
-          canvas.add(img);
-        } catch {
-          console.warn(`Layer image failed: ${layer.image}`);
+        } else if (obj.type === 'text') {
+          fabricObj = new IText((obj as any).text ?? '', {
+            left: obj.left, top: obj.top,
+            fontSize: (obj as any).fontSize ?? 20,
+            fill: obj.fill,
+            fontFamily: (obj as any).fontFamily ?? 'Georgia, serif',
+            fontWeight: (obj as any).fontWeight ?? 'normal',
+            fontStyle:  (obj as any).fontStyle  ?? 'normal',
+            textAlign:  (obj as any).textAlign  ?? 'left',
+            originX:    (obj as any).textAlign === 'center' ? 'center' : 'left',
+          });
         }
-      }
-
-      // For each text zone — add guide + placeholders
-      for (const zone of t.textZones) {
-        const isDark = ['#0','#1','#2'].some(p => t.bgColor.startsWith(p));
-        const textColor   = isDark ? '#FFFFFF' : '#1a1a1a';
-        const accentColor = '#C8A951';
-        const midX        = zone.x + zone.width / 2;
-
-        // Dashed guide rectangle
-        const guide = new Rect({
-          left:            zone.x,
-          top:             zone.y,
-          width:           zone.width,
-          height:          zone.height,
-          fill:            'transparent',
-          stroke:          accentColor,
-          strokeWidth:     1,
-          strokeDashArray: [6, 4],
-          opacity:         0.35,
-          selectable:      false,
-          evented:         false,
-        });
-        canvas.add(guide);
-
-        // Placeholder texts
-        const placeholders = [
-          {
-            text:       eventTitle    || 'Double-click to add title',
-            top:        zone.y + 40,
-            fontSize:   eventTitle    ? 36 : 24,
-            fill:       eventTitle    ? textColor : accentColor,
-            opacity:    eventTitle    ? 1    : 0.4,
-            fontWeight: 'bold',
-            fontFamily: 'Noto Serif Devanagari, Georgia, serif',
-          },
-          {
-            text:       formattedDate || 'Double-click to add date',
-            top:        zone.y + zone.height / 2 - 30,
-            fontSize:   16,
-            fill:       textColor,
-            opacity:    formattedDate ? 0.9 : 0.35,
-            fontWeight: 'normal',
-            fontFamily: 'Georgia, serif',
-          },
-          {
-            text:       eventLocation || 'Double-click to add location',
-            top:        zone.y + zone.height / 2 + 10,
-            fontSize:   14,
-            fill:       accentColor,
-            opacity:    eventLocation ? 0.9 : 0.35,
-            fontWeight: 'normal',
-            fontFamily: 'Georgia, serif',
-          },
-          {
-            text:       'Double-click to add your message',
-            top:        zone.y + zone.height - 60,
-            fontSize:   13,
-            fill:       textColor,
-            opacity:    0.25,
-            fontWeight: 'normal',
-            fontFamily: 'Georgia, serif',
-          },
-        ];
-
-        for (const p of placeholders) {
-          canvas.add(new IText(p.text, {
-            left:       midX,
-            top:        p.top,
-            fontSize:   p.fontSize,
-            fill:       p.fill,
-            opacity:    p.opacity,
-            fontWeight: p.fontWeight,
-            fontFamily: p.fontFamily,
-            textAlign:  'center',
-            originX:    'center',
-          }));
-        }
-
-        // Thin accent dividers
-        canvas.add(new Rect({ left: zone.x+60, top: zone.y+8,         width: zone.width-120, height:1, fill:accentColor, opacity:0.4, selectable:false, evented:false }));
-        canvas.add(new Rect({ left: zone.x+60, top: zone.y+zone.height-8, width: zone.width-120, height:1, fill:accentColor, opacity:0.4, selectable:false, evented:false }));
+        if (fabricObj) canvas.add(fabricObj);
       }
 
       canvas.renderAll();
@@ -202,91 +181,51 @@ export function TemplatesPanel({ fabricRef, eventTitle, eventDate, eventLocation
     }
   }
 
-  const catBtn = (cat: string): React.CSSProperties => ({
-    padding:'4px 10px', borderRadius:12, fontSize:10, cursor:'pointer',
-    border:`1px solid ${activeCat===cat ? 'var(--ec-brand)' : 'var(--ec-border)'}`,
-    background: activeCat===cat ? 'var(--ec-brand-subtle)' : 'transparent',
-    color: activeCat===cat ? 'var(--ec-brand)' : 'var(--ec-text-3)',
-    fontFamily:'inherit', whiteSpace:'nowrap' as const, transition:'all 0.12s',
-  });
-
   return (
-    <div style={{ position:'absolute', left:48, top:0, bottom:0, width:300, background:'var(--ec-surface)', borderRight:'1px solid var(--ec-border)', display:'flex', flexDirection:'column', zIndex:10, boxShadow:'4px 0 16px rgba(0,0,0,0.3)' }}>
-
-      {/* Header */}
+    <div style={{
+      position:'absolute', left:48, top:0, bottom:0, width:280,
+      background:'var(--ec-surface)', borderRight:'1px solid var(--ec-border)',
+      display:'flex', flexDirection:'column', zIndex:10,
+      boxShadow:'4px 0 16px rgba(0,0,0,0.3)',
+    }}>
       <div style={{ padding:'12px 14px 8px', borderBottom:'1px solid var(--ec-border)', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
-        <div>
-          <p style={{ fontSize:11, fontWeight:600, color:'var(--ec-text-2)', textTransform:'uppercase', letterSpacing:'0.06em' }}>Templates</p>
-          <p style={{ fontSize:10, color:'var(--ec-text-3)', marginTop:2 }}>Indian · Hindu · Sanatan · Ancient Bharath</p>
-        </div>
-        <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--ec-text-3)', fontSize:18 }}>×</button>
+        <p style={{ fontSize:11, fontWeight:600, color:'var(--ec-text-2)', textTransform:'uppercase', letterSpacing:'0.06em' }}>Templates</p>
+        <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--ec-text-3)', fontSize:18 }}>├ù</button>
       </div>
 
-      {/* Category pills */}
-      <div style={{ padding:'8px 10px', borderBottom:'1px solid var(--ec-border)', display:'flex', gap:5, overflowX:'auto', flexShrink:0 }}>
-        {CATEGORIES.map(cat => (
-          <button key={cat} style={catBtn(cat)} onClick={() => setActiveCat(cat)}>{cat}</button>
-        ))}
-      </div>
-
-      <p style={{ fontSize:11, color:'var(--ec-text-3)', padding:'8px 14px 2px', flexShrink:0 }}>
-        Click to apply · Your event details auto-fill
+      <p style={{ fontSize:11, color:'var(--ec-text-3)', padding:'8px 14px 4px' }}>
+        Click a template to apply ΓÇö your event details auto-fill
       </p>
 
-      {/* Template grid */}
-      <div style={{ flex:1, overflowY:'auto', padding:'6px 8px 8px' }}>
-        {loading && <div style={{ display:'flex', justifyContent:'center', padding:32 }}><div className="ec-spinner" /></div>}
-        {error   && <p style={{ fontSize:11, color:'var(--ec-danger)', padding:'12px 8px' }}>{error}</p>}
-        {!loading && !error && filtered.length === 0 && (
-          <p style={{ fontSize:12, color:'var(--ec-text-3)', padding:'20px 8px', textAlign:'center' }}>No templates in this category yet</p>
-        )}
-
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-          {filtered.map(t => (
-            <div key={t.id} onClick={() => applyTemplate(t)} style={{
-              borderRadius:'var(--ec-radius-md)', border:'1px solid var(--ec-border)',
-              overflow:'hidden', cursor:applying===t.id?'wait':'pointer',
-              opacity:applying===t.id?0.6:1, background:'var(--ec-surface-raised)',
-              transition:'all 0.15s',
-            }}>
-              {/* Thumbnail */}
-              <div style={{ aspectRatio:'3/4', background:t.bgColor, position:'relative', overflow:'hidden' }}>
-                <img
-                  src={`${TEMPLATES_BASE}/${t.id}/${t.thumbImage}?t=${Date.now()}`}
-                  alt={t.name}
-                  style={{ width:'100%', height:'100%', objectFit:'cover' }}
-                  onError={e => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                    const parent = (e.target as HTMLImageElement).parentElement;
-                    if (parent) {
-                      parent.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px"><span style="font-size:18px">🖼</span><span style="font-size:9px;color:#999;text-align:center;padding:0 8px">${t.name}</span></div>`;
-                    }
-                  }}
-                />
-                {applying===t.id && (
-                  <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                    <div className="ec-spinner" style={{ width:20, height:20 }} />
-                  </div>
-                )}
-                {/* Layer count badge */}
-                <div style={{ position:'absolute', top:4, right:4, background:'rgba(0,0,0,0.6)', borderRadius:8, padding:'2px 6px', fontSize:9, color:'#fff' }}>
-                  {t.layers.length}L
-                </div>
+      <div style={{ flex:1, overflowY:'auto', padding:'8px' }}>
+        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          {TEMPLATES.map(t => (
+            <div
+              key={t.id}
+              onClick={() => applyTemplate(t)}
+              style={{
+                borderRadius:'var(--ec-radius-md)',
+                border:'1px solid var(--ec-border)',
+                overflow:'hidden',
+                cursor: applying === t.id ? 'wait' : 'pointer',
+                opacity: applying === t.id ? 0.6 : 1,
+                transition:'all 0.15s',
+                background:'var(--ec-surface-raised)',
+              }}
+            >
+              {/* Color preview bar */}
+              <div style={{ height:48, background: t.preview.bg, display:'flex', alignItems:'center', justifyContent:'center', gap:8, padding:'0 16px' }}>
+                <div style={{ flex:1, height:2, background: t.preview.accent, opacity:0.6 }} />
+                <span style={{ fontSize:11, color: t.preview.accent, fontWeight:600, whiteSpace:'nowrap' }}>{t.name}</span>
+                <div style={{ flex:1, height:2, background: t.preview.accent, opacity:0.6 }} />
               </div>
-              {/* Info */}
-              <div style={{ padding:'6px 8px' }}>
-                <p style={{ fontSize:11, fontWeight:600, color:'var(--ec-text-1)', marginBottom:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.name}</p>
-                <p style={{ fontSize:9, color:'var(--ec-text-3)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.description}</p>
+              <div style={{ padding:'8px 12px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <span style={{ fontSize:11, color:'var(--ec-text-2)' }}>{t.description}</span>
+                {applying === t.id && <div className="ec-spinner" style={{ width:14, height:14 }} />}
               </div>
             </div>
           ))}
         </div>
-      </div>
-
-      <div style={{ padding:'8px 14px', borderTop:'1px solid var(--ec-border)', flexShrink:0 }}>
-        <p style={{ fontSize:9, color:'var(--ec-text-3)', textAlign:'center' }}>
-          Add templates by uploading images to S3 and updating index.json
-        </p>
       </div>
     </div>
   );
