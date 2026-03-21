@@ -511,6 +511,25 @@ public class EventsHandler
 <body style='margin:0;padding:0;background:#111827;font-family:Georgia,serif;color:#f9fafb'>
   <div style='max-width:520px;margin:0 auto;padding:48px 28px 32px'>
 
+    <!-- Lotus logo - subtle, centered, links to app -->
+    <div style='text-align:center;margin-bottom:24px'>
+      <a href='https://eventcraft.irotte.com' style='display:inline-block;text-decoration:none'>
+        <svg width='36' height='36' viewBox='0 0 32 32' fill='none' xmlns='http://www.w3.org/2000/svg'>
+          <g transform='translate(16,18)'>
+            <ellipse cx='0' cy='-11' rx='3.5' ry='9' fill='#4F6FBF' opacity='0.85'/>
+            <ellipse cx='9' cy='-6' rx='3.5' ry='8.5' fill='#4F6FBF' opacity='0.7' transform='rotate(38 9 -6)'/>
+            <ellipse cx='-9' cy='-6' rx='3.5' ry='8.5' fill='#4F6FBF' opacity='0.7' transform='rotate(-38 -9 -6)'/>
+            <ellipse cx='13' cy='1' rx='3' ry='7' fill='#7B9FD4' opacity='0.45' transform='rotate(65 13 1)'/>
+            <ellipse cx='-13' cy='1' rx='3' ry='7' fill='#7B9FD4' opacity='0.45' transform='rotate(-65 -13 1)'/>
+            <circle cx='0' cy='-5' r='4.5' fill='#0F0A2E'/>
+            <circle cx='0' cy='-5' r='2.8' fill='#D4AF37'/>
+            <circle cx='0' cy='-5' r='1.2' fill='#0F0A2E'/>
+            <line x1='0' y1='0' x2='0' y2='9' stroke='#4F6FBF' stroke-width='1.5' stroke-linecap='round'/>
+            <line x1='-6' y1='9' x2='6' y2='9' stroke='#4F6FBF' stroke-width='1' stroke-linecap='round' opacity='0.5'/>
+          </g>
+        </svg>
+      </a>
+    </div>
     <!-- Personal greeting â€” no branding here -->
     <p style='font-size:15px;color:#9ca3af;margin:0 0 8px 0;font-family:Helvetica,Arial,sans-serif'>
       Dear {guestName},
