@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useTheme } from '@/components/ui/ThemeProvider';
 import { EcButton } from '@/components/ui/EcButton';

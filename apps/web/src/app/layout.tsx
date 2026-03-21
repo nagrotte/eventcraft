@@ -1,20 +1,22 @@
-import type { Metadata } from "next";
-import "./globals.css";
-import { AppProviders } from "@/components/AppProviders";
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import './globals.css';
+import { AppProviders } from '@/components/AppProviders';
+
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title: "EventCraft — Invitation Studio",
-  description: "Create beautiful Indian & Hindu event invitations with AI",
+  title:       'EventCraft',
+  description: 'Create and manage beautiful event invitations'
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-      </head>
-      <body>
-        <AppProviders>{children}</AppProviders>
+    <html lang="en" data-theme="dark" suppressHydrationWarning>
+      <body style={{ fontFamily: 'var(--ec-font)' }} className={inter.variable}>
+        <AppProviders>
+          {children}
+        </AppProviders>
       </body>
     </html>
   );

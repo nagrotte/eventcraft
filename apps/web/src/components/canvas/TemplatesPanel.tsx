@@ -77,15 +77,14 @@ export function TemplatesPanel({ fabricRef, eventTitle, eventDate, eventLocation
     try {
       const { FabricImage, IText, Rect } = await import('fabric');
 
-      // Note: canvas stays at its initialized dimensions (600x850)
-      // Square templates (like mandala) will be centered within the standard canvas
+      // Resize canvas if template has different dimensions
+      if (t.canvasWidth !== canvas.width || t.canvasHeight !== canvas.height) {
+        canvas.setWidth(t.canvasWidth);
+        canvas.setHeight(t.canvasHeight);
+      }
 
-      // Remove all objects without destroying canvas context
-      const objects = canvas.getObjects();
-      canvas.discardActiveObject();
-      canvas.remove(...objects);
+      canvas.clear();
       canvas.backgroundColor = t.bgColor;
-      canvas.renderAll();
 
       // Sort layers by zIndex
       const sortedLayers = [...t.layers].sort((a, b) => a.zIndex - b.zIndex);
