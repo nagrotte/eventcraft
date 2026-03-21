@@ -121,7 +121,7 @@ export default function AdminPage() {
                   {new Date(u.created).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 </span>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  {u.email !== ADMIN_EMAIL && (
+                  {u.email !== user?.email && (
                     <>
                       <EcButton size="sm" variant="ghost" loading={actionUserId === u.username} onClick={() => toggleUser(u.username, u.enabled)}>
                         {u.enabled ? 'Disable' : 'Enable'}
