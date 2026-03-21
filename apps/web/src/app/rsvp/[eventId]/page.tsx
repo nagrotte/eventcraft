@@ -96,7 +96,7 @@ export default function RsvpPage() {
   );
 
   const formattedDate = event?.eventDate
-    ? new Date(event.eventDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+    ? new Date(event.eventDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) + ' at ' + new Date(event.eventDate).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
     : '';
 
   const inp: React.CSSProperties = {
