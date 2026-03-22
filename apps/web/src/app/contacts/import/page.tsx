@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { EcNav } from '@/components/ui/EcNav';
@@ -13,7 +13,7 @@ interface GoogleContact {
   phone: string;
 }
 
-export default function ContactImportPage() {
+function ContactImportInner() {
   const { user, loading, isAdmin, logout } = useAuth();
   const router       = useRouter();
   const searchParams = useSearchParams();
@@ -221,5 +221,17 @@ export default function ContactImportPage() {
 
       </main>
     </div>
+  );
+}
+
+export default function ContactImportPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="ec-spinner" />
+      </div>
+    }>
+      <ContactImportInner />
+    </Suspense>
   );
 }
