@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb';
+
+const dynamo = new DynamoDBClient({ region: 'us-east-1' });
+const TABLE  = process.env.DYNAMODB_TABLE ?? 'eventcraft-staging';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -38,10 +42,9 @@ export async function GET(req: NextRequest) {
       { headers: { Authorization: `Bearer ${tokenData.access_token}` } }
     );
 
-    const peopleData = await peopleRes.json();
+    const peopleData  = await peopleRes.json();
     const connections = peopleData.connections ?? [];
 
-    // Transform to simple contact format
     const contacts = connections
       .map((person: any) => ({
         name:  person.names?.[0]?.displayName ?? '',
@@ -50,9 +53,21 @@ export async function GET(req: NextRequest) {
       }))
       .filter((c: any) => c.name && (c.email || c.phone));
 
-    // Encode contacts in URL and redirect to import page
-    const encoded = encodeURIComponent(JSON.stringify(contacts));
-    return NextResponse.redirect(`${appUrl}/contacts/import?contacts=${encoded}`);
+    // Store in DynamoDB with a short token — TTL 10 minutes
+    const token = Math.random().toString(36).substring(2, 12);
+    const ttl   = Math.floor(Date.now() / 1000) + 600;
+
+    await dynamo.send(new PutItemCommand({
+      TableName: TABLE,
+      Item: {
+        PK:       { S: `GMPORT#${token}` },
+        SK:       { S: 'DATA' },
+        contacts: { S: JSON.stringify(contacts) },
+        ttl:      { N: ttl.toString() },
+      },
+    }));
+
+    return NextResponse.redirect(`${appUrl}/contacts/import?token=${token}`);
 
   } catch (err) {
     console.error('Google OAuth error:', err);

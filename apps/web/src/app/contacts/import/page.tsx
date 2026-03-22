@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { EcNav } from '@/components/ui/EcNav';
@@ -18,20 +18,21 @@ function ContactImportInner() {
   const router       = useRouter();
   const searchParams = useSearchParams();
 
-  const [contacts,   setContacts]   = useState<GoogleContact[]>([]);
-  const [selected,   setSelected]   = useState<Set<number>>(new Set());
-  const [importing,  setImporting]  = useState(false);
-  const [imported,   setImported]   = useState(0);
-  const [error,      setError]      = useState('');
-  const [step,       setStep]       = useState<'loading' | 'select' | 'done' | 'error'>('loading');
+  const [contacts,  setContacts]  = useState<GoogleContact[]>([]);
+  const [selected,  setSelected]  = useState<Set<number>>(new Set());
+  const [importing, setImporting] = useState(false);
+  const [imported,  setImported]  = useState(0);
+  const [error,     setError]     = useState('');
+  const [step,      setStep]      = useState<'loading' | 'select' | 'done' | 'error'>('loading');
+  const [search,    setSearch]    = useState('');
 
   useEffect(() => {
     if (!loading && !user) { router.push('/auth/login'); return; }
   }, [user, loading, router]);
 
   useEffect(() => {
-    const contactsParam = searchParams.get('contacts');
-    const errorParam    = searchParams.get('error');
+    const token      = searchParams.get('token');
+    const errorParam = searchParams.get('error');
 
     if (errorParam) {
       const msg = errorParam === 'cancelled' ? 'Import cancelled.' : 'Failed to connect to Google. Please try again.';
@@ -40,17 +41,17 @@ function ContactImportInner() {
       return;
     }
 
-    if (contactsParam) {
-      try {
-        const parsed = JSON.parse(decodeURIComponent(contactsParam));
-        setContacts(parsed);
-        // Select all by default
-        setSelected(new Set(parsed.map((_: any, i: number) => i)));
-        setStep('select');
-      } catch {
-        setError('Failed to read contacts from Google.');
-        setStep('error');
-      }
+    if (token) {
+      // Fetch contacts from our API using the token
+      fetch(`/api/auth/google/contacts?token=${token}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.error) { setError(data.error); setStep('error'); return; }
+          setContacts(data.contacts ?? []);
+          setSelected(new Set((data.contacts ?? []).map((_: any, i: number) => i)));
+          setStep('select');
+        })
+        .catch(() => { setError('Failed to load contacts.'); setStep('error'); });
       return;
     }
 
@@ -59,26 +60,20 @@ function ContactImportInner() {
   }, [searchParams]);
 
   function toggleContact(i: number) {
-    setSelected(prev => {
-      const s = new Set(prev);
-      s.has(i) ? s.delete(i) : s.add(i);
-      return s;
-    });
+    setSelected(prev => { const s = new Set(prev); s.has(i) ? s.delete(i) : s.add(i); return s; });
   }
 
-  function toggleAll() {
-    if (selected.size === contacts.length) setSelected(new Set());
-    else setSelected(new Set(contacts.map((_, i) => i)));
+  function toggleAll(filtered: GoogleContact[], indices: number[]) {
+    const allSelected = indices.every(i => selected.has(i));
+    if (allSelected) setSelected(prev => { const s = new Set(prev); indices.forEach(i => s.delete(i)); return s; });
+    else setSelected(prev => { const s = new Set(prev); indices.forEach(i => s.add(i)); return s; });
   }
 
   async function importSelected() {
     const toImport = contacts.filter((_, i) => selected.has(i));
     if (!toImport.length) return;
-
-    setImporting(true);
-    setError('');
+    setImporting(true); setError('');
     let count = 0;
-
     for (const contact of toImport) {
       try {
         await apiClient.post('/contacts', {
@@ -87,15 +82,19 @@ function ContactImportInner() {
           phone: contact.phone || undefined,
         });
         count++;
-      } catch {
-        // Skip duplicates/errors silently
-      }
+      } catch { /* skip duplicates */ }
     }
-
     setImported(count);
     setImporting(false);
     setStep('done');
   }
+
+  const filtered = contacts.filter(c =>
+    !search || c.name.toLowerCase().includes(search.toLowerCase()) ||
+    c.email.toLowerCase().includes(search.toLowerCase())
+  );
+  const filteredIndices = filtered.map((c, _) => contacts.indexOf(c));
+  const allFilteredSelected = filteredIndices.length > 0 && filteredIndices.every(i => selected.has(i));
 
   if (loading || step === 'loading') return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--ec-bg)' }}>
@@ -108,12 +107,8 @@ function ContactImportInner() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--ec-bg)' }}>
-      <EcNav
-        email={user?.email}
-        isAdmin={isAdmin}
-        onLogout={logout}
-        breadcrumbs={[{ label: 'Invite', href: '#' }, { label: 'Import from Gmail' }]}
-      />
+      <EcNav email={user?.email} isAdmin={isAdmin} onLogout={logout}
+        breadcrumbs={[{ label: 'Invite', href: '#' }, { label: 'Import from Gmail' }]} />
       <main className="ec-page" style={{ maxWidth: 680 }}>
 
         {step === 'error' && (
@@ -152,44 +147,43 @@ function ContactImportInner() {
               </p>
             </div>
 
-            {/* Search + select all */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <button
-                onClick={toggleAll}
-                style={{ fontSize: 12, color: 'var(--ec-brand)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
-              >
-                {selected.size === contacts.length ? 'Deselect all' : 'Select all'}
+            {/* Search */}
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search contacts..."
+              className="ec-input"
+              style={{ width: '100%', height: 36, fontSize: 13, marginBottom: 10, boxSizing: 'border-box' }}
+            />
+
+            {/* Select all */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <button onClick={() => toggleAll(filtered, filteredIndices)} style={{ fontSize: 12, color: 'var(--ec-brand)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+                {allFilteredSelected ? 'Deselect all' : 'Select all'}{search ? ' (filtered)' : ''}
               </button>
-              <p style={{ fontSize: 12, color: 'var(--ec-text-3)' }}>
-                {selected.size} of {contacts.length} selected
-              </p>
+              <p style={{ fontSize: 12, color: 'var(--ec-text-3)' }}>{selected.size} of {contacts.length} selected</p>
             </div>
 
             {/* Contact list */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 24, maxHeight: 480, overflowY: 'auto', border: '1px solid var(--ec-border)', borderRadius: 'var(--ec-radius-lg)', padding: 8 }}>
-              {contacts.map((c, i) => {
-                const isSelected = selected.has(i);
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 24, maxHeight: 440, overflowY: 'auto', border: '1px solid var(--ec-border)', borderRadius: 'var(--ec-radius-lg)', padding: 8 }}>
+              {filtered.length === 0 ? (
+                <p style={{ fontSize: 13, color: 'var(--ec-text-3)', textAlign: 'center', padding: 24 }}>No contacts match your search.</p>
+              ) : filtered.map((c, fi) => {
+                const realIdx = contacts.indexOf(c);
+                const isSelected = selected.has(realIdx);
                 return (
-                  <div
-                    key={i}
-                    onClick={() => toggleContact(i)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
-                      borderRadius: 'var(--ec-radius-md)', cursor: 'pointer',
-                      background: isSelected ? 'var(--ec-brand-subtle)' : 'transparent',
-                      border: `1px solid ${isSelected ? 'var(--ec-brand-border)' : 'transparent'}`,
-                      transition: 'all 0.1s',
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => toggleContact(i)}
+                  <div key={fi} onClick={() => toggleContact(realIdx)} style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px',
+                    borderRadius: 'var(--ec-radius-md)', cursor: 'pointer',
+                    background: isSelected ? 'var(--ec-brand-subtle)' : 'transparent',
+                    border: `1px solid ${isSelected ? 'var(--ec-brand-border)' : 'transparent'}`,
+                    transition: 'all 0.1s',
+                  }}>
+                    <input type="checkbox" checked={isSelected} onChange={() => toggleContact(realIdx)}
                       onClick={e => e.stopPropagation()}
-                      style={{ width: 14, height: 14, accentColor: 'var(--ec-brand)', flexShrink: 0 }}
-                    />
-                    <div style={{ width: 30, height: 30, borderRadius: '50%', background: isSelected ? 'var(--ec-brand)' : 'var(--ec-surface-raised)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: isSelected ? '#fff' : 'var(--ec-text-2)' }}>
+                      style={{ width: 14, height: 14, accentColor: 'var(--ec-brand)', flexShrink: 0 }} />
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: isSelected ? 'var(--ec-brand)' : 'var(--ec-surface-raised)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: isSelected ? '#fff' : 'var(--ec-text-2)' }}>
                         {c.name.charAt(0).toUpperCase()}
                       </span>
                     </div>
@@ -207,18 +201,13 @@ function ContactImportInner() {
             {error && <p style={{ fontSize: 12, color: 'var(--ec-danger)', marginBottom: 12 }}>{error}</p>}
 
             <div style={{ display: 'flex', gap: 8 }}>
-              <EcButton
-                onClick={importSelected}
-                loading={importing}
-                disabled={selected.size === 0 || importing}
-              >
+              <EcButton onClick={importSelected} loading={importing} disabled={selected.size === 0 || importing}>
                 {importing ? 'Importing...' : `Import ${selected.size} contact${selected.size !== 1 ? 's' : ''}`}
               </EcButton>
               <EcButton variant="ghost" onClick={() => router.back()}>Cancel</EcButton>
             </div>
           </>
         )}
-
       </main>
     </div>
   );
