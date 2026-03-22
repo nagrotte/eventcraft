@@ -33,7 +33,7 @@ export function LogoMark({ iconOnly = false, size = 32, centered = false, onClic
       cursor: onClick ? 'pointer' : undefined,
     }} onClick={onClick}>
       {lotus}
-      {!iconOnly && (<span className="ec-logo-wordmark" style={{display:'contents'}}>
+      {!iconOnly && (<span className="ec-logo-wordmark" style={{display:'inline-flex', alignItems:'center'}}>
         <span style={{
           fontSize: Math.round(size * 0.53),
           fontWeight: 600,
