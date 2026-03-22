@@ -37,7 +37,7 @@ export function LogoMark({ iconOnly = false, size = 32, centered = false, onClic
         <span style={{
           fontSize: Math.round(size * 0.53),
           fontWeight: 600,
-          color: '#ffffff',
+          color: 'var(--ec-text-1)',
           letterSpacing: '-0.02em',
           fontFamily: 'Georgia, serif',
         }}>
