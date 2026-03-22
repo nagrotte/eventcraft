@@ -373,9 +373,15 @@ body { min-height: 100vh; }
 /* ── Mobile responsive additions ─────────────────────────────────────────── */
 @media (max-width: 768px) {
 
-  /* Nav — hide email on small screens */
+  /* Nav — hide email and wordmark text on small screens */
   .ec-nav {
     padding: 0 12px;
+  }
+  .ec-nav-email {
+    display: none;
+  }
+  .ec-logo-wordmark {
+    display: none;
   }
 
   /* Dashboard page padding */

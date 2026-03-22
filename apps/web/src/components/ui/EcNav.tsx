@@ -42,7 +42,7 @@ export function EcNav({ email, isAdmin, onLogout, breadcrumbs }: EcNavProps) {
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {email && (
-          <span style={{ fontSize: 12, color: 'var(--ec-text-3)' }}>{email}</span>
+          <span className="ec-nav-email" style={{ fontSize: 12, color: 'var(--ec-text-3)' }}>{email}</span>
         )}
         {isAdmin && (
           <Link href="/admin" style={{ fontSize: 12, color: 'var(--ec-brand)', textDecoration: 'none', fontWeight: 500, padding: '4px 8px', borderRadius: 'var(--ec-radius-sm)', border: '1px solid var(--ec-brand-border)', background: 'var(--ec-brand-subtle)' }}>
