@@ -15,4 +15,9 @@ public interface IEventRepository
     Task<List<ContactEntity>>            ListContactsAsync(string userId, CancellationToken ct = default);
     Task<ContactEntity>                  CreateContactAsync(string userId, CreateContactRequest req, CancellationToken ct = default);
     Task                                 DeleteContactAsync(string userId, string contactId, CancellationToken ct = default);
+
+    // Curated image library
+    Task<List<CuratedImageEntity>>       ListCuratedAsync(CancellationToken ct = default);
+    Task<CuratedImageEntity>             CreateCuratedAsync(CuratedImageEntity entity, CancellationToken ct = default);
+    Task                                 DeleteCuratedAsync(string imageId, CancellationToken ct = default);
 }

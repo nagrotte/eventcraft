@@ -1,4 +1,4 @@
-﻿using Amazon.DynamoDBv2;
+using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
 using EventCraft.Events.Models;
 using Microsoft.Extensions.Logging;
@@ -305,4 +305,66 @@ public class DynamoEventRepository : IEventRepository
         if (e.GalleryUrl     is not null) item["galleryUrl"]     = new() { S = e.GalleryUrl };
         return item;
     }
+
+    // Curated image library
+    public async Task<List<CuratedImageEntity>> ListCuratedAsync(CancellationToken ct = default)
+    {
+        var response = await _dynamo.ScanAsync(new ScanRequest
+        {
+            TableName        = _table,
+            FilterExpression = "begins_with(PK, :prefix) AND SK = :sk AND #active = :true",
+            ExpressionAttributeNames = new Dictionary<string, string> { ["#active"] = "active" },
+            ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+            {
+                [":prefix"] = new() { S = "CURATED#" },
+                [":sk"]     = new() { S = "METADATA" },
+                [":true"]   = new() { BOOL = true },
+            }
+        }, ct);
+        return response.Items.Select(MapCurated).ToList();
+    }
+
+    public async Task<CuratedImageEntity> CreateCuratedAsync(CuratedImageEntity entity, CancellationToken ct = default)
+    {
+        var item = new Dictionary<string, AttributeValue>
+        {
+            ["PK"]        = new() { S = $"CURATED#{entity.ImageId}" },
+            ["SK"]        = new() { S = "METADATA" },
+            ["imageId"]   = new() { S = entity.ImageId },
+            ["title"]     = new() { S = entity.Title },
+            ["category"]  = new() { S = entity.Category },
+            ["s3Key"]     = new() { S = entity.S3Key },
+            ["url"]       = new() { S = entity.Url },
+            ["active"]    = new() { BOOL = entity.Active },
+            ["createdAt"] = new() { S = entity.CreatedAt },
+        };
+        await _dynamo.PutItemAsync(new PutItemRequest { TableName = _table, Item = item }, ct);
+        _log.LogInformation("Curated image created: {ImageId}", entity.ImageId);
+        return entity;
+    }
+
+    public async Task DeleteCuratedAsync(string imageId, CancellationToken ct = default)
+    {
+        await _dynamo.DeleteItemAsync(new DeleteItemRequest
+        {
+            TableName = _table,
+            Key = new Dictionary<string, AttributeValue>
+            {
+                ["PK"] = new() { S = $"CURATED#{imageId}" },
+                ["SK"] = new() { S = "METADATA" }
+            }
+        }, ct);
+        _log.LogInformation("Curated image deleted: {ImageId}", imageId);
+    }
+
+    private static CuratedImageEntity MapCurated(Dictionary<string, AttributeValue> item) => new()
+    {
+        ImageId   = item.TryGetValue("imageId",   out var id)  ? id.S   : "",
+        Title     = item.TryGetValue("title",     out var t)   ? t.S    : "",
+        Category  = item.TryGetValue("category",  out var cat) ? cat.S  : "General",
+        S3Key     = item.TryGetValue("s3Key",     out var sk)  ? sk.S   : "",
+        Url       = item.TryGetValue("url",       out var u)   ? u.S    : "",
+        Active    = item.TryGetValue("active",    out var a)   && a.BOOL,
+        CreatedAt = item.TryGetValue("createdAt", out var ca)  ? ca.S   : "",
+    };
 }

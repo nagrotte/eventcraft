@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { Canvas } from 'fabric';
 import apiClient from '@/lib/api-client';
 
@@ -9,6 +9,14 @@ interface UnsplashPhoto {
   urls:            { small: string; regular: string };
   alt_description: string | null;
   user:            { name: string };
+}
+
+interface CuratedImage {
+  imageId:  string;
+  title:    string;
+  category: string;
+  url:      string;
+  active:   boolean;
 }
 
 interface ImagePanelProps {
@@ -23,15 +31,42 @@ const SUGGESTED = [
   'ocean sunset', 'mountain golden', 'candles bokeh', 'rose petals',
 ];
 
+const CATEGORIES = ['All', 'Hindu/Puja', 'Birthday', 'Wedding', 'Cultural', 'Festive', 'General'];
+
 export function ImagePanel({ fabricRef, eventId, onClose }: ImagePanelProps) {
-  const [tab,     setTab]     = useState<'search' | 'upload'>('search');
-  const [query,   setQuery]   = useState('');
-  const [photos,  setPhotos]  = useState<UnsplashPhoto[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [placing, setPlacing] = useState<string | null>(null);
-  const [error,   setError]   = useState('');
+  const [tab,       setTab]       = useState<'library' | 'search' | 'upload'>('library');
+  const [query,     setQuery]     = useState('');
+  const [photos,    setPhotos]    = useState<UnsplashPhoto[]>([]);
+  const [loading,   setLoading]   = useState(false);
+  const [placing,   setPlacing]   = useState<string | null>(null);
+  const [error,     setError]     = useState('');
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Library state
+  const [curated,     setCurated]     = useState<CuratedImage[]>([]);
+  const [libLoading,  setLibLoading]  = useState(false);
+  const [libCategory, setLibCategory] = useState('All');
+
+  useEffect(() => {
+    if (tab === 'library') loadCurated();
+  }, [tab]);
+
+  async function loadCurated() {
+    setLibLoading(true);
+    try {
+      const res = await apiClient.get('/curated');
+      setCurated(res.data.data ?? []);
+    } catch {
+      // silently fail — library may be empty
+    } finally {
+      setLibLoading(false);
+    }
+  }
+
+  const filteredCurated = libCategory === 'All'
+    ? curated
+    : curated.filter(img => img.category === libCategory);
 
   const search = useCallback(async (q?: string) => {
     const sq = q ?? query;
@@ -80,26 +115,22 @@ export function ImagePanel({ fabricRef, eventId, onClose }: ImagePanelProps) {
     } finally { setPlacing(null); }
   }
 
+  async function placeCurated(img: CuratedImage, asBackground: boolean) {
+    setPlacing(img.imageId);
+    try { await placeFromUrl(img.url, asBackground); }
+    finally { setPlacing(null); }
+  }
+
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true); setError('');
     try {
-      // Get presigned URL
       const res = await apiClient.post(`/events/${eventId}/upload-url`, {
-        fileName:    file.name,
-        contentType: file.type,
+        fileName: file.name, contentType: file.type,
       });
       const { uploadUrl, publicUrl } = res.data.data;
-
-      // Upload directly to S3
-      await fetch(uploadUrl, {
-        method:  'PUT',
-        headers: { 'Content-Type': file.type },
-        body:    file,
-      });
-
-      // Place on canvas
+      await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
       await placeFromUrl(publicUrl, false);
     } catch {
       setError('Upload failed — check your connection');
@@ -113,7 +144,7 @@ export function ImagePanel({ fabricRef, eventId, onClose }: ImagePanelProps) {
     flex: 1, padding: '8px 0', background: 'none',
     border: 'none', borderBottom: `2px solid ${active ? 'var(--ec-brand)' : 'transparent'}`,
     color: active ? 'var(--ec-brand)' : 'var(--ec-text-3)',
-    cursor: 'pointer', fontSize: 12, fontWeight: active ? 600 : 400, fontFamily: 'inherit',
+    cursor: 'pointer', fontSize: 11, fontWeight: active ? 600 : 400, fontFamily: 'inherit',
     transition: 'all 0.12s',
   });
 
@@ -126,14 +157,97 @@ export function ImagePanel({ fabricRef, eventId, onClose }: ImagePanelProps) {
           <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--ec-text-2)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Images</p>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ec-text-3)', fontSize: 18 }}>×</button>
         </div>
-        {/* Tabs */}
         <div style={{ display: 'flex' }}>
-          <button style={tabStyle(tab === 'search')} onClick={() => setTab('search')}>🔍 Stock Photos</button>
-          <button style={tabStyle(tab === 'upload')} onClick={() => setTab('upload')}>📤 Upload</button>
+          <button style={tabStyle(tab === 'library')} onClick={() => setTab('library')}>Library</button>
+          <button style={tabStyle(tab === 'search')}  onClick={() => setTab('search')}>Stock</button>
+          <button style={tabStyle(tab === 'upload')}  onClick={() => setTab('upload')}>Upload</button>
         </div>
       </div>
 
-      {/* Upload tab */}
+      {/* ── Library tab ── */}
+      {tab === 'library' && (
+        <>
+          <div style={{ padding: '8px 8px 4px', flexShrink: 0, borderBottom: '1px solid var(--ec-border)' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {CATEGORIES.map(cat => (
+                <button key={cat} onClick={() => setLibCategory(cat)} style={{
+                  padding: '3px 8px', borderRadius: 10, fontSize: 10,
+                  background: libCategory === cat ? 'var(--ec-brand)' : 'var(--ec-surface-raised)',
+                  border: `1px solid ${libCategory === cat ? 'var(--ec-brand)' : 'var(--ec-border)'}`,
+                  color: libCategory === cat ? '#fff' : 'var(--ec-text-2)',
+                  cursor: 'pointer', fontFamily: 'inherit',
+                }}>
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
+            {libLoading ? (
+              <div style={{ textAlign: 'center', padding: 32 }}>
+                <div className="ec-spinner" style={{ margin: '0 auto' }} />
+              </div>
+            ) : filteredCurated.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 32 }}>
+                <p style={{ fontSize: 12, color: 'var(--ec-text-3)', marginBottom: 8 }}>
+                  {curated.length === 0 ? 'No curated images yet.' : 'No images in this category.'}
+                </p>
+                <p style={{ fontSize: 11, color: 'var(--ec-text-3)' }}>
+                  Admins can upload images from the Admin panel.
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                {filteredCurated.map(img => (
+                  <div key={img.imageId} style={{ position: 'relative' }}>
+                    <div
+                      onClick={() => placeCurated(img, false)}
+                      title={img.title}
+                      style={{
+                        aspectRatio: '3/4', borderRadius: 'var(--ec-radius-sm)',
+                        overflow: 'hidden', cursor: placing === img.imageId ? 'wait' : 'pointer',
+                        border: '1px solid var(--ec-border)',
+                        opacity: placing === img.imageId ? 0.6 : 1,
+                      }}
+                    >
+                      <img
+                        src={img.url}
+                        alt={img.title}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                      />
+                    </div>
+                    {/* BG button */}
+                    <button
+                      onClick={() => placeCurated(img, true)}
+                      style={{
+                        position: 'absolute', bottom: 4, right: 4,
+                        background: 'rgba(0,0,0,0.7)', border: 'none',
+                        borderRadius: 4, color: '#fff', fontSize: 9,
+                        padding: '2px 5px', cursor: 'pointer',
+                      }}
+                    >BG</button>
+                    {/* Title overlay */}
+                    <div style={{
+                      position: 'absolute', bottom: 0, left: 0, right: 0,
+                      background: 'linear-gradient(to top, rgba(0,0,0,0.55), transparent)',
+                      padding: '14px 4px 4px',
+                      borderRadius: '0 0 var(--ec-radius-sm) var(--ec-radius-sm)',
+                      pointerEvents: 'none',
+                    }}>
+                      <p style={{ fontSize: 9, color: '#fff', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 28 }}>
+                        {img.title}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ── Upload tab ── */}
       {tab === 'upload' && (
         <div style={{ padding: 16, flex: 1 }}>
           <div
@@ -142,7 +256,6 @@ export function ImagePanel({ fabricRef, eventId, onClose }: ImagePanelProps) {
               border: '2px dashed var(--ec-border)', borderRadius: 'var(--ec-radius-lg)',
               padding: '32px 16px', textAlign: 'center', cursor: 'pointer',
               background: 'var(--ec-surface-raised)', marginBottom: 12,
-              transition: 'border-color 0.12s',
             }}
           >
             <div style={{ fontSize: 32, marginBottom: 8 }}>📁</div>
@@ -153,13 +266,10 @@ export function ImagePanel({ fabricRef, eventId, onClose }: ImagePanelProps) {
           </div>
           <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFileUpload} />
           {error && <p style={{ fontSize: 11, color: 'var(--ec-danger)' }}>{error}</p>}
-          <p style={{ fontSize: 10, color: 'var(--ec-text-3)', marginTop: 8 }}>
-            Images are stored securely in your account
-          </p>
         </div>
       )}
 
-      {/* Search tab */}
+      {/* ── Search tab ── */}
       {tab === 'search' && (
         <>
           <div style={{ padding: '10px 10px 6px', flexShrink: 0 }}>

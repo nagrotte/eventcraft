@@ -80,6 +80,11 @@ public class EventsHandler
             if (method == "POST"   && path == "/contacts")           return await CreateContact(request);
             if (method == "DELETE" && path.StartsWith("/contacts/")) return await DeleteContact(request);
 
+            // Curated image library
+            if (method == "GET"    && path == "/curated")           return await ListCurated(request);
+            if (method == "POST"   && path == "/curated")           return await CreateCurated(request);
+            if (method == "DELETE" && path.StartsWith("/curated/")) return await DeleteCurated(request);
+
             if (method == "GET"  && path == "/events") return await ListEvents(request);
             if (method == "POST" && path == "/events") return await CreateEvent(request);
 
@@ -579,5 +584,75 @@ public class EventsHandler
         if (string.IsNullOrWhiteSpace(body)) return null;
         try { return JsonSerializer.Deserialize<T>(body, _json); }
         catch { return null; }
+    }
+
+    // Curated image library
+
+    private async Task<APIGatewayProxyResponse> ListCurated(APIGatewayProxyRequest req)
+    {
+        var repo   = _services.GetRequiredService<IEventRepository>();
+        var images = await repo.ListCuratedAsync();
+        return OkResponse(ApiResponse<object>.Ok(images));
+    }
+
+    private async Task<APIGatewayProxyResponse> CreateCurated(APIGatewayProxyRequest req)
+    {
+        var userId = GetUserId(req);
+        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+        var claims = req.RequestContext?.Authorizer?.Claims;
+        var groups = claims != null && claims.ContainsKey("cognito:groups") ? claims["cognito:groups"] : "";
+        if (!groups.Contains("admin")) return ErrorResponse(403, "FORBIDDEN", "Admin only");
+
+        var body = Deserialize<CreateCuratedRequest>(req.Body);
+        if (body is null || string.IsNullOrWhiteSpace(body.Title))
+            return ErrorResponse(400, "BAD_REQUEST", "Title is required");
+
+        var imageId     = Guid.NewGuid().ToString("N");
+        var contentType = body.ContentType ?? "image/jpeg";
+        var ext         = contentType switch {
+            "image/png"  => "png",
+            "image/webp" => "webp",
+            "image/gif"  => "gif",
+            _            => "jpg"
+        };
+        var s3Key     = $"curated/{imageId}.{ext}";
+        var s3        = _services.GetRequiredService<IAmazonS3>();
+        var uploadUrl = s3.GetPreSignedURL(new GetPreSignedUrlRequest
+        {
+            BucketName  = _mediaBucket,
+            Key         = s3Key,
+            Verb        = HttpVerb.PUT,
+            Expires     = DateTime.UtcNow.AddMinutes(15),
+            ContentType = contentType,
+        });
+        var publicUrl = $"https://{_mediaBucket}.s3.amazonaws.com/{s3Key}";
+
+        var repo   = _services.GetRequiredService<IEventRepository>();
+        var entity = new CuratedImageEntity
+        {
+            ImageId   = imageId,
+            Title     = body.Title.Trim(),
+            Category  = body.Category?.Trim() ?? "General",
+            S3Key     = s3Key,
+            Url       = publicUrl,
+            Active    = true,
+            CreatedAt = DateTime.UtcNow.ToString("O"),
+        };
+        await repo.CreateCuratedAsync(entity);
+        return OkResponse(ApiResponse<object>.Ok(new { imageId, uploadUrl, publicUrl }), 201);
+    }
+
+    private async Task<APIGatewayProxyResponse> DeleteCurated(APIGatewayProxyRequest req)
+    {
+        var userId = GetUserId(req);
+        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+        var claims = req.RequestContext?.Authorizer?.Claims;
+        var groups = claims != null && claims.ContainsKey("cognito:groups") ? claims["cognito:groups"] : "";
+        if (!groups.Contains("admin")) return ErrorResponse(403, "FORBIDDEN", "Admin only");
+
+        var imageId = GetSegment(req.Path, 1);
+        var repo    = _services.GetRequiredService<IEventRepository>();
+        await repo.DeleteCuratedAsync(imageId);
+        return new APIGatewayProxyResponse { StatusCode = 204, Headers = CorsHeaders() };
     }
 }
