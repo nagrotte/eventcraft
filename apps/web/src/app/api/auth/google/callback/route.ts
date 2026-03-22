@@ -35,15 +35,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(`${appUrl}/contacts/import?error=token_failed`);
     }
 
-    // Fetch contacts from Google People API
-    const peopleRes = await fetch(
-      'https://people.googleapis.com/v1/people/me/connections' +
-      '?personFields=names,emailAddresses,phoneNumbers&pageSize=500&sortOrder=FIRST_NAME_ASCENDING',
-      { headers: { Authorization: `Bearer ${tokenData.access_token}` } }
-    );
-
-    const peopleData  = await peopleRes.json();
-    const connections = peopleData.connections ?? [];
+    // Fetch ALL contacts from Google People API with pagination
+    let connections: any[] = [];
+    let pageToken: string | undefined;
+    do {
+      const url = 'https://people.googleapis.com/v1/people/me/connections' +
+        '?personFields=names,emailAddresses,phoneNumbers&pageSize=1000&sortOrder=FIRST_NAME_ASCENDING' +
+        (pageToken ? `&pageToken=${pageToken}` : '');
+      const peopleRes = await fetch(url, { headers: { Authorization: `Bearer ${tokenData.access_token}` } });
+      const peopleData = await peopleRes.json();
+      connections = connections.concat(peopleData.connections ?? []);
+      pageToken = peopleData.nextPageToken;
+    } while (pageToken);
 
     const contacts = connections
       .map((person: any) => ({
