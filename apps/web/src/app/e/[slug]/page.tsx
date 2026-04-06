@@ -1,56 +1,61 @@
 'use client';
 import { LogoMark } from '@/components/ui/LogoMark';
-
 import { useParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
-interface Schedule {
-  time:        string;
-  description: string;
-}
+interface Schedule { time: string; description: string; }
 
 interface PublicEvent {
-  eventId:      string;
-  title:        string;
-  eventDate:    string;
-  location?:    string;
-  description?: string;
-  canvasJson?:  string;
-  status:       string;
-  micrositeSlug?: string;
-  schedule?:    Schedule[];
+  eventId:         string;
+  title:           string;
+  eventDate:       string;
+  location?:       string;
+  description?:    string;
+  canvasJson?:     string;
+  status:          string;
+  micrositeSlug?:  string;
+  schedule?:       Schedule[];
   organizerName?:  string;
   organizerPhone?: string;
   organizerEmail?: string;
-  galleryUrl?:  string;
+  galleryUrl?:     string;
 }
 
 export default function MicrositePage() {
-  const { slug }              = useParams<{ slug: string }>();
-  const [event, setEvent]     = useState<PublicEvent | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [step, setStep]       = useState<'view' | 'form' | 'done'>('view');
-  const [name, setName]       = useState('');
-  const [email, setEmail]     = useState('');
+  const { slug }                = useParams<{ slug: string }>();
+  const [event, setEvent]       = useState<PublicEvent | null>(null);
+  const [loading, setLoading]   = useState(true);
+  const [step, setStep]         = useState<'view' | 'form' | 'done'>('view');
+  const [name, setName]         = useState('');
+  const [email, setEmail]       = useState('');
   const [response, setResponse] = useState<'yes' | 'no' | 'maybe'>('yes');
-  const [message, setMessage] = useState('');
+  const [guestCount, setGuestCount] = useState(1);
+  const [message, setMessage]   = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError]     = useState('');
-  const [copied, setCopied]   = useState(false);
-  const canvasRef             = useRef<HTMLCanvasElement>(null);
+  const [formError, setFormError]   = useState('');
+  const [loadError, setLoadError]   = useState('');
+  const [copied, setCopied]     = useState(false);
+  const canvasRef               = useRef<HTMLCanvasElement>(null);
   const [canvasScale, setCanvasScale] = useState(1);
-  const apiBase               = process.env.NEXT_PUBLIC_API_URL ?? '';
-  const appUrl                = process.env.NEXT_PUBLIC_APP_URL ?? 'https://eventcraft.irotte.com';
+  const apiBase = process.env.NEXT_PUBLIC_API_URL ?? '';
+  const appUrl  = process.env.NEXT_PUBLIC_APP_URL ?? 'https://eventcraft.irotte.com';
 
   useEffect(() => {
     async function load() {
       try {
         const res  = await fetch(`${apiBase}/events/slug/${slug}/public`);
         const data = await res.json();
-        if (data.data) { const d = data.data; if (typeof d.schedule === 'string') { try { d.schedule = JSON.parse(d.schedule); } catch { d.schedule = []; } } setEvent(d); }
-        else setError('Event not found');
+        if (data.data) {
+          const d = data.data;
+          if (typeof d.schedule === 'string') {
+            try { d.schedule = JSON.parse(d.schedule); } catch { d.schedule = []; }
+          }
+          setEvent(d);
+        } else {
+          setLoadError('Event not found');
+        }
       } catch {
-        setError('Event not found');
+        setLoadError('Event not found');
       } finally {
         setLoading(false);
       }
@@ -83,17 +88,37 @@ export default function MicrositePage() {
   }, [event]);
 
   async function submitRsvp() {
-    if (!name.trim() || !email.trim()) { setError('Name and email are required'); return; }
-    setSubmitting(true); setError('');
+    // Clear previous error
+    setFormError('');
+
+    // Validate
+    if (!name.trim()) {
+      setFormError('Please enter your name');
+      return;
+    }
+    if (!email.trim()) {
+      setFormError('Please enter your email address');
+      return;
+    }
+    if (!event) {
+      setFormError('Event not loaded. Please refresh and try again.');
+      return;
+    }
+
+    setSubmitting(true);
     try {
-      const res = await fetch(`${apiBase}/events/${event!.eventId}/rsvp`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, response, message }),
+      const res = await fetch(`${apiBase}/events/${event.eventId}/rsvp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, response, message, guestCount }),
       });
       if (!res.ok) throw new Error();
       setStep('done');
-    } catch { setError('Failed to submit â€” please try again'); }
-    finally { setSubmitting(false); }
+    } catch {
+      setFormError('Failed to submit — please try again');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   async function copyLink() {
@@ -109,7 +134,7 @@ export default function MicrositePage() {
     </div>
   );
 
-  if (error || !event) return (
+  if (loadError || !event) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a0a12' }}>
       <p style={{ color: '#888', fontFamily: 'Georgia, serif', fontSize: 16 }}>Event not found</p>
     </div>
@@ -128,42 +153,33 @@ export default function MicrositePage() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#08080f', fontFamily: 'Georgia, serif', color: '#fff' }}>
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        * { box-sizing: border-box; }
-        ::selection { background: rgba(79,111,191,0.3); }
-      `}</style>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } } * { box-sizing: border-box; } ::selection { background: rgba(79,111,191,0.3); }`}</style>
 
-      {/* Hero â€” canvas design */}
+      {/* Hero canvas - centered on mobile */}
       {event.canvasJson && (
         <div style={{ width: '100%', overflow: 'hidden', display: 'flex', justifyContent: 'center', background: '#04040a' }}>
-          <div style={{ width: 600, height: 850, transformOrigin: 'top left', transform: `scale(${canvasScale})`, marginBottom: -(850 * (1 - canvasScale)) }}>
+          <div style={{ width: 600, height: 850, transformOrigin: 'top center', transform: `scale(${canvasScale})`, marginBottom: -(850 * (1 - canvasScale)) }}>
             <canvas ref={canvasRef} style={{ display: 'block' }} />
           </div>
         </div>
       )}
 
-      {/* Main content */}
       <div style={{ maxWidth: 680, margin: '0 auto', padding: '40px 20px' }}>
 
-        {/* EventCraft logo */}
+        {/* Logo */}
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 32 }}>
-          <LogoMark size={28} onClick={() => window.location.href='https://eventcraft.irotte.com'} />
+          <LogoMark size={28} onClick={() => window.location.href = 'https://eventcraft.irotte.com'} />
         </div>
 
-        {/* Event title */}
+        {/* Title */}
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <h1 style={{ fontSize: 36, fontWeight: 700, color: '#fff', marginBottom: 8, lineHeight: 1.2, letterSpacing: '-0.5px' }}>
-            {event.title}
-          </h1>
+          <h1 style={{ fontSize: 36, fontWeight: 700, color: '#fff', marginBottom: 8, lineHeight: 1.2, letterSpacing: '-0.5px' }}>{event.title}</h1>
           {event.description && (
-            <p style={{ fontSize: 16, color: '#aaa', lineHeight: 1.7, maxWidth: 520, margin: '0 auto' }}>
-              {event.description}
-            </p>
+            <p style={{ fontSize: 16, color: '#aaa', lineHeight: 1.7, maxWidth: 520, margin: '0 auto' }}>{event.description}</p>
           )}
         </div>
 
-        {/* Event details card */}
+        {/* Details card */}
         <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: '24px 28px', marginBottom: 24 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
@@ -184,10 +200,7 @@ export default function MicrositePage() {
                 <div>
                   <p style={{ fontSize: 13, color: '#666', marginBottom: 2 }}>Location</p>
                   <p style={{ fontSize: 15, color: '#fff', fontWeight: 500 }}>{event.location}</p>
-                  <a href={`https://maps.google.com/?q=${encodeURIComponent(event.location)}`} target="_blank" rel="noreferrer"
-                    style={{ fontSize: 12, color: '#4F6FBF', textDecoration: 'none', marginTop: 2, display: 'inline-block' }}>
-                    Get directions â†’
-                  </a>
+                  <a href={`https://maps.google.com/?q=${encodeURIComponent(event.location)}`} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#4F6FBF', textDecoration: 'none', marginTop: 2, display: 'inline-block' }}>Get directions →</a>
                 </div>
               </div>
             )}
@@ -228,17 +241,14 @@ export default function MicrositePage() {
           </div>
         )}
 
-        {/* Photo gallery link */}
+        {/* Gallery */}
         {event.galleryUrl && (
           <div style={{ background: 'rgba(212,175,55,0.05)', border: '1px solid rgba(212,175,55,0.15)', borderRadius: 16, padding: '20px 28px', marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
             <div>
               <p style={{ fontSize: 14, fontWeight: 600, color: '#D4AF37', marginBottom: 4 }}>📸 Event Photos</p>
               <p style={{ fontSize: 13, color: '#888' }}>View and download photos from this event</p>
             </div>
-            <a href={event.galleryUrl} target="_blank" rel="noreferrer"
-              style={{ padding: '10px 20px', background: '#D4AF37', color: '#0a0a12', borderRadius: 8, fontSize: 13, fontWeight: 700, textDecoration: 'none', flexShrink: 0, fontFamily: 'Helvetica Neue, sans-serif' }}>
-              View Gallery
-            </a>
+            <a href={event.galleryUrl} target="_blank" rel="noreferrer" style={{ padding: '10px 20px', background: '#D4AF37', color: '#0a0a12', borderRadius: 8, fontSize: 13, fontWeight: 700, textDecoration: 'none', flexShrink: 0, fontFamily: 'Helvetica Neue, sans-serif' }}>View Gallery</a>
           </div>
         )}
 
@@ -248,32 +258,58 @@ export default function MicrositePage() {
           <p style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>Let the organizer know if you can attend</p>
 
           {step === 'view' && (
-            <button onClick={() => setStep('form')} style={{ width: '100%', padding: '14px', background: '#4F6FBF', color: '#fff', border: 'none', borderRadius: 8, fontSize: 16, fontWeight: 600, cursor: 'pointer', fontFamily: 'Georgia, serif' }}>
+            <button onClick={() => { setFormError(''); setStep('form'); }} style={{ width: '100%', padding: '14px', background: '#4F6FBF', color: '#fff', border: 'none', borderRadius: 8, fontSize: 16, fontWeight: 600, cursor: 'pointer', fontFamily: 'Georgia, serif' }}>
               RSVP Now
             </button>
           )}
 
           {step === 'form' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
+
+              {/* Error banner — at the TOP, always visible */}
+              {formError && (
+                <div style={{ padding: '12px 16px', background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.5)', borderRadius: 8, color: '#fca5a5', fontSize: 14, fontWeight: 500, fontFamily: 'Helvetica Neue, sans-serif' }}>
+                  ⚠ {formError}
+                </div>
+              )}
+
+              {/* Response buttons */}
+              <div style={{ display: 'flex', gap: 8 }}>
                 {(['yes', 'no', 'maybe'] as const).map(r => (
-                  <button key={r} onClick={() => setResponse(r)} style={{
-                    flex: 1, padding: '10px 0', borderRadius: 8,
-                    border: `1px solid ${response === r ? '#4F6FBF' : 'rgba(255,255,255,0.1)'}`,
-                    background: response === r ? 'rgba(79,111,191,0.2)' : 'transparent',
-                    color: response === r ? '#7B9FD4' : '#777',
-                    cursor: 'pointer', fontSize: 13, fontWeight: response === r ? 600 : 400, fontFamily: 'Georgia, serif',
-                  }}>
+                  <button key={r} onClick={() => setResponse(r)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `1px solid ${response === r ? '#4F6FBF' : 'rgba(255,255,255,0.1)'}`, background: response === r ? 'rgba(79,111,191,0.2)' : 'transparent', color: response === r ? '#7B9FD4' : '#777', cursor: 'pointer', fontSize: 13, fontWeight: response === r ? 600 : 400, fontFamily: 'Georgia, serif' }}>
                     {r === 'yes' ? 'Yes' : r === 'no' ? 'No' : 'Maybe'}
                   </button>
                 ))}
               </div>
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name *" style={inp} />
-              <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email address *" type="email" style={inp} />
+
+              <input
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Your name *"
+                style={{ ...inp, border: !name.trim() && formError ? '1px solid rgba(239,68,68,0.6)' : '1px solid rgba(255,255,255,0.12)' }}
+              />
+              <input
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="Email address *"
+                type="email"
+                style={{ ...inp, border: !email.trim() && formError ? '1px solid rgba(239,68,68,0.6)' : '1px solid rgba(255,255,255,0.12)' }}
+              />
+
+              {/* Guest count */}
+              <div>
+                <label style={{ fontSize: 12, color: '#666', display: 'block', marginBottom: 6, fontFamily: 'Helvetica Neue, sans-serif' }}>Number of guests attending (including yourself)</label>
+                <div style={{ display: 'flex', alignItems: 'center', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, overflow: 'hidden' }}>
+                  <button onClick={() => setGuestCount(g => Math.max(1, g - 1))} style={{ width: 44, height: 42, background: 'rgba(255,255,255,0.06)', border: 'none', color: '#fff', fontSize: 20, cursor: 'pointer', flexShrink: 0 }}>−</button>
+                  <span style={{ flex: 1, textAlign: 'center', color: '#fff', fontSize: 15, fontWeight: 500, fontFamily: 'Georgia, serif' }}>{guestCount}</span>
+                  <button onClick={() => setGuestCount(g => Math.min(20, g + 1))} style={{ width: 44, height: 42, background: 'rgba(255,255,255,0.06)', border: 'none', color: '#fff', fontSize: 20, cursor: 'pointer', flexShrink: 0 }}>+</button>
+                </div>
+              </div>
+
               <textarea value={message} onChange={e => setMessage(e.target.value)} placeholder="Message (optional)" rows={2} style={{ ...inp, resize: 'none' }} />
-              {error && <p style={{ fontSize: 13, color: '#f87171' }}>{error}</p>}
+
               <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={() => setStep('view')} style={{ flex: 1, padding: '12px 0', background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#888', cursor: 'pointer', fontFamily: 'Georgia, serif', fontSize: 14 }}>Back</button>
+                <button onClick={() => { setStep('view'); setFormError(''); }} style={{ flex: 1, padding: '12px 0', background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#888', cursor: 'pointer', fontFamily: 'Georgia, serif', fontSize: 14 }}>Back</button>
                 <button onClick={submitRsvp} disabled={submitting} style={{ flex: 2, padding: '12px 0', background: '#4F6FBF', border: 'none', borderRadius: 8, color: '#fff', cursor: submitting ? 'wait' : 'pointer', fontSize: 14, fontWeight: 600, fontFamily: 'Georgia, serif', opacity: submitting ? 0.7 : 1 }}>
                   {submitting ? 'Submitting...' : 'Submit RSVP'}
                 </button>
@@ -292,23 +328,20 @@ export default function MicrositePage() {
           )}
         </div>
 
-        {/* Share section */}
+        {/* Share */}
         <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: '20px 28px', marginBottom: 40 }}>
           <p style={{ fontSize: 13, color: '#666', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: 'Helvetica Neue, sans-serif' }}>Share this event</p>
           <div style={{ display: 'flex', gap: 10 }}>
             <button onClick={copyLink} style={{ flex: 1, padding: '10px 0', background: copied ? 'rgba(79,111,191,0.2)' : 'rgba(255,255,255,0.06)', border: `1px solid ${copied ? 'rgba(79,111,191,0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 8, color: copied ? '#7B9FD4' : '#aaa', cursor: 'pointer', fontSize: 13, fontFamily: 'Helvetica Neue, sans-serif', transition: 'all 0.2s' }}>
-              {copied ? 'âœ“ Copied' : 'Copy Link'}
+              {copied ? '✓ Copied' : 'Copy Link'}
             </button>
-            <button onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`${event.title} â€” ${appUrl}/e/${slug}`)}`, '_blank')}
-              style={{ flex: 1, padding: '10px 0', background: 'rgba(37,211,102,0.08)', border: '1px solid rgba(37,211,102,0.2)', borderRadius: 8, color: '#25d366', cursor: 'pointer', fontSize: 13, fontFamily: 'Helvetica Neue, sans-serif' }}>
+            <button onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`${event.title} — ${appUrl}/e/${slug}`)}`, '_blank')} style={{ flex: 1, padding: '10px 0', background: 'rgba(37,211,102,0.08)', border: '1px solid rgba(37,211,102,0.2)', borderRadius: 8, color: '#25d366', cursor: 'pointer', fontSize: 13, fontFamily: 'Helvetica Neue, sans-serif' }}>
               WhatsApp
             </button>
           </div>
         </div>
 
-        <p style={{ textAlign: 'center', fontSize: 11, color: 'rgba(255,255,255,0.15)', fontFamily: 'Helvetica Neue, sans-serif' }}>
-          Powered by EventCraft · eventcraft.irotte.com
-        </p>
+        <p style={{ textAlign: 'center', fontSize: 11, color: 'rgba(255,255,255,0.15)', fontFamily: 'Helvetica Neue, sans-serif' }}>Powered by EventCraft · eventcraft.irotte.com</p>
       </div>
     </div>
   );

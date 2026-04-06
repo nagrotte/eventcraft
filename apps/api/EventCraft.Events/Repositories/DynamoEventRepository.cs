@@ -135,7 +135,27 @@ public class DynamoEventRepository : IEventRepository
 
     public async Task SaveRsvpAsync(string eventId, RsvpRequest rsvp, CancellationToken ct = default)
     {
-        var rsvpId = Guid.NewGuid().ToString("N");
+        // Check for existing RSVP with same email for this event (upsert)
+        var existing = await _dynamo.QueryAsync(new QueryRequest
+        {
+            TableName              = _table,
+            KeyConditionExpression = "PK = :pk AND begins_with(SK, :prefix)",
+            FilterExpression       = "email = :email",
+            ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+            {
+                [":pk"]     = new() { S = PK(eventId) },
+                [":prefix"] = new() { S = "RSVP#" },
+                [":email"]  = new() { S = rsvp.Email },
+            }
+        }, ct);
+
+        var rsvpId    = existing.Items.Count > 0
+            ? existing.Items[0]["rsvpId"].S
+            : Guid.NewGuid().ToString("N");
+        var createdAt = existing.Items.Count > 0
+            ? existing.Items[0]["createdAt"].S
+            : DateTime.UtcNow.ToString("O");
+
         var item = new Dictionary<string, AttributeValue>
         {
             ["PK"]        = new() { S = PK(eventId) },
@@ -145,11 +165,17 @@ public class DynamoEventRepository : IEventRepository
             ["name"]      = new() { S = rsvp.Name },
             ["email"]     = new() { S = rsvp.Email },
             ["response"]  = new() { S = rsvp.Response },
-            ["createdAt"] = new() { S = DateTime.UtcNow.ToString("O") },
+            ["createdAt"] = new() { S = createdAt },
+            ["updatedAt"] = new() { S = DateTime.UtcNow.ToString("O") },
+            ["guestCount"] = new() { N = Math.Max(1, rsvp.GuestCount).ToString() },
         };
         if (!string.IsNullOrEmpty(rsvp.Message))
             item["message"] = new() { S = rsvp.Message };
+        else
+            item["message"] = new() { S = "" };
+
         await _dynamo.PutItemAsync(new PutItemRequest { TableName = _table, Item = item }, ct);
+        _log.LogInformation("RSVP upserted: {RsvpId} for event {EventId} email {Email}", rsvpId, eventId, rsvp.Email);
     }
 
     public async Task<List<RsvpEntity>> ListRsvpsAsync(string eventId, CancellationToken ct = default)
@@ -166,7 +192,8 @@ public class DynamoEventRepository : IEventRepository
         }, ct);
         return response.Items.Select(item => new RsvpEntity
         {
-            RsvpId    = item["rsvpId"].S,
+            RsvpId     = item["rsvpId"].S,
+                GuestCount = item.TryGetValue("guestCount", out var gc) ? int.Parse(gc.N ?? "1") : 1,
             EventId   = eventId,
             Name      = item["name"].S,
             Email     = item["email"].S,
@@ -367,4 +394,18 @@ public class DynamoEventRepository : IEventRepository
         Active    = item.TryGetValue("active",    out var a)   && a.BOOL,
         CreatedAt = item.TryGetValue("createdAt", out var ca)  ? ca.S   : "",
     };
+
+    public async Task DeleteRsvpAsync(string eventId, string rsvpId, CancellationToken ct = default)
+    {
+        await _dynamo.DeleteItemAsync(new DeleteItemRequest
+        {
+            TableName = _table,
+            Key = new Dictionary<string, AttributeValue>
+            {
+                ["PK"] = new() { S = $"EVENT#{eventId}" },
+                ["SK"] = new() { S = $"RSVP#{rsvpId}" }
+            }
+        }, ct);
+        _log.LogInformation("RSVP deleted: {RsvpId} from event {EventId}", rsvpId, eventId);
+    }
 }

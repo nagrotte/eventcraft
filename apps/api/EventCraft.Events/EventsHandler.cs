@@ -96,6 +96,7 @@ public class EventsHandler
             if (method == "POST" && path.StartsWith("/events/") && path.EndsWith("/upload-url"))   return await GetUploadUrl(request);
             if (method == "POST" && path.StartsWith("/events/") && path.EndsWith("/rsvp"))         return await SubmitRsvp(request);
             if (method == "GET"  && path.StartsWith("/events/") && path.EndsWith("/rsvp"))         return await ListRsvps(request);
+            if (method == "DELETE" && path.Contains("/rsvp/"))                                    return await DeleteRsvp(request);
             if (method == "GET"  && path.StartsWith("/events/") && path.EndsWith("/public"))       return await GetPublicEvent(request);
             if (method == "POST" && path.StartsWith("/events/") && path.EndsWith("/invite/email")) return await SendEmailInvites(request);
 
@@ -653,6 +654,23 @@ public class EventsHandler
         var imageId = GetSegment(req.Path, 1);
         var repo    = _services.GetRequiredService<IEventRepository>();
         await repo.DeleteCuratedAsync(imageId);
+        return new APIGatewayProxyResponse { StatusCode = 204, Headers = CorsHeaders() };
+    }
+
+    private async Task<APIGatewayProxyResponse> DeleteRsvp(APIGatewayProxyRequest req)
+    {
+        var userId = GetUserId(req);
+        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+
+        // Path: /events/{eventId}/rsvp/{rsvpId}
+        var parts   = req.Path.Split('/');
+        var eventId = parts.Length > 2 ? parts[2] : "";
+        var rsvpId  = parts.Length > 4 ? parts[4] : "";
+        if (string.IsNullOrEmpty(eventId) || string.IsNullOrEmpty(rsvpId))
+            return ErrorResponse(400, "BAD_REQUEST", "Invalid path");
+
+        var repo = _services.GetRequiredService<IEventRepository>();
+        await repo.DeleteRsvpAsync(eventId, rsvpId);
         return new APIGatewayProxyResponse { StatusCode = 204, Headers = CorsHeaders() };
     }
 }

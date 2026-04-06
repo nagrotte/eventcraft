@@ -11,7 +11,15 @@ import { EcBadge } from '@/components/ui/EcBadge';
 import apiClient from '@/lib/api-client';
 import { useEffect } from 'react';
 
-interface RsvpEntry { name: string; email: string; response: string; message?: string; createdAt: string; }
+interface RsvpEntry {
+  rsvpId:     string;
+  name:       string;
+  email:      string;
+  response:   string;
+  message?:   string;
+  createdAt:  string;
+  guestCount: number;
+}
 
 export default function DashboardPage() {
   const { user, loading: authLoading, logout, isAdmin } = useAuth();
@@ -20,16 +28,16 @@ export default function DashboardPage() {
   const createEvent = useCreateEvent();
   const deleteEvent = useDeleteEvent();
 
-  const [showCreate, setShowCreate] = useState(false);
-  const [title,      setTitle]      = useState('');
-  const [eventDate,  setEventDate]  = useState('');
-  const [location,   setLocation]   = useState('');
-  const [creating,   setCreating]   = useState(false);
-  const [createErr,  setCreateErr]  = useState('');
-
+  const [showCreate,   setShowCreate]   = useState(false);
+  const [title,        setTitle]        = useState('');
+  const [eventDate,    setEventDate]    = useState('');
+  const [location,     setLocation]     = useState('');
+  const [creating,     setCreating]     = useState(false);
+  const [createErr,    setCreateErr]    = useState('');
   const [expandedRsvp, setExpandedRsvp] = useState<string | null>(null);
   const [rsvpData,     setRsvpData]     = useState<Record<string, RsvpEntry[]>>({});
   const [rsvpLoading,  setRsvpLoading]  = useState<string | null>(null);
+  const [deletingRsvp, setDeletingRsvp] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/auth/login');
@@ -57,6 +65,19 @@ export default function DashboardPage() {
     } catch { } finally { setRsvpLoading(null); }
   }
 
+  async function deleteRsvp(eventId: string, rsvpId: string) {
+    if (!confirm('Remove this RSVP?')) return;
+    setDeletingRsvp(rsvpId);
+    try {
+      await apiClient.delete(`/events/${eventId}/rsvp/${rsvpId}`);
+      setRsvpData(prev => ({
+        ...prev,
+        [eventId]: (prev[eventId] ?? []).filter(r => r.rsvpId !== rsvpId)
+      }));
+    } catch { alert('Failed to delete RSVP'); }
+    finally { setDeletingRsvp(null); }
+  }
+
   async function copyRsvpLink(eventId: string) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://eventcraft.irotte.com';
     await navigator.clipboard.writeText(`${appUrl}/rsvp/${eventId}`);
@@ -76,12 +97,8 @@ export default function DashboardPage() {
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
           <div>
-            <h1 style={{ fontSize: 22, fontWeight: 600, color: 'var(--ec-text-1)', letterSpacing: '-0.02em', marginBottom: 4 }}>
-              Events
-            </h1>
-            <p style={{ fontSize: 13, color: 'var(--ec-text-3)' }}>
-              {events.length} event{events.length !== 1 ? 's' : ''}
-            </p>
+            <h1 style={{ fontSize: 22, fontWeight: 600, color: 'var(--ec-text-1)', letterSpacing: '-0.02em', marginBottom: 4 }}>Events</h1>
+            <p style={{ fontSize: 13, color: 'var(--ec-text-3)' }}>{events.length} event{events.length !== 1 ? 's' : ''}</p>
           </div>
           <EcButton onClick={() => setShowCreate(!showCreate)}>+ New event</EcButton>
         </div>
@@ -116,10 +133,12 @@ export default function DashboardPage() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {events.map(ev => {
-              const isExpanded = expandedRsvp === ev.eventId;
-              const rsvps      = rsvpData[ev.eventId] ?? [];
-              const counts     = { yes: rsvps.filter(r => r.response === 'yes').length, no: rsvps.filter(r => r.response === 'no').length, maybe: rsvps.filter(r => r.response === 'maybe').length };
-              const appUrl     = process.env.NEXT_PUBLIC_APP_URL ?? 'https://eventcraft.irotte.com';
+              const isExpanded   = expandedRsvp === ev.eventId;
+              const rsvps        = rsvpData[ev.eventId] ?? [];
+              const yesRsvps     = rsvps.filter(r => r.response === 'yes');
+              const counts       = { yes: yesRsvps.length, no: rsvps.filter(r => r.response === 'no').length, maybe: rsvps.filter(r => r.response === 'maybe').length };
+              const totalGuests  = rsvps.reduce((sum, r) => sum + (r.guestCount ?? 1), 0);
+              const appUrl       = process.env.NEXT_PUBLIC_APP_URL ?? 'https://eventcraft.irotte.com';
               const micrositeUrl = ev.micrositeSlug ? `${appUrl}/e/${ev.micrositeSlug}` : null;
 
               return (
@@ -128,9 +147,7 @@ export default function DashboardPage() {
                   <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px', gap: 12 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                        <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--ec-text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {ev.title}
-                        </p>
+                        <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--ec-text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</p>
                         <EcBadge status={ev.status === 'published' ? 'published' : 'draft'} />
                       </div>
                       <p style={{ fontSize: 12, color: 'var(--ec-text-3)' }}>
@@ -156,11 +173,18 @@ export default function DashboardPage() {
                   {/* RSVP panel */}
                   {isExpanded && (
                     <div style={{ borderTop: '1px solid var(--ec-border)', padding: 16, background: 'var(--ec-bg)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>
+
+                      {/* Summary row */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
                         <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--ec-text-2)' }}>Guest Responses</p>
                         <span style={{ fontSize: 11, color: 'var(--ec-success)' }}>✓ {counts.yes} yes</span>
                         <span style={{ fontSize: 11, color: 'var(--ec-text-3)' }}>? {counts.maybe} maybe</span>
                         <span style={{ fontSize: 11, color: 'var(--ec-danger)' }}>✗ {counts.no} no</span>
+                        {rsvps.length > 0 && (
+                          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 8, background: 'var(--ec-brand-subtle)', color: 'var(--ec-brand)', border: '1px solid var(--ec-brand-border)' }}>
+                            {totalGuests} total guests
+                          </span>
+                        )}
                         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
                           <EcButton size="sm" variant="ghost" onClick={() => copyRsvpLink(ev.eventId)}>Copy RSVP link</EcButton>
                           {micrositeUrl && (
@@ -168,23 +192,38 @@ export default function DashboardPage() {
                           )}
                         </div>
                       </div>
+
+                      {/* RSVP list */}
                       {rsvps.length === 0 ? (
                         <p style={{ fontSize: 13, color: 'var(--ec-text-3)' }}>No RSVPs yet</p>
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                           {rsvps.map((r, i) => (
-                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', background: 'var(--ec-surface)', borderRadius: 'var(--ec-radius-sm)', border: '1px solid var(--ec-border)' }}>
-                              <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--ec-surface-raised)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ec-text-2)' }}>{r.name.charAt(0)}</span>
+                            <div key={i} style={{ background: 'var(--ec-surface)', borderRadius: 'var(--ec-radius-sm)', border: '1px solid var(--ec-border)', padding: '10px 12px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--ec-surface-raised)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ec-text-2)' }}>{r.name.charAt(0).toUpperCase()}</span>
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--ec-text-1)' }}>{r.name}</p>
+                                  <p style={{ fontSize: 11, color: 'var(--ec-text-3)' }}>{r.email}</p>
+                                </div>
+                                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 8, background: r.response === 'yes' ? 'var(--ec-success-bg)' : r.response === 'no' ? 'var(--ec-danger-bg)' : 'var(--ec-warning-bg)', color: r.response === 'yes' ? 'var(--ec-success)' : r.response === 'no' ? 'var(--ec-danger)' : 'var(--ec-warning)', border: `1px solid ${r.response === 'yes' ? 'var(--ec-success-border)' : r.response === 'no' ? 'var(--ec-danger-border)' : 'var(--ec-warning-border)'}`, flexShrink: 0 }}>
+                                  {r.response}
+                                </span>
+                                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 8, background: 'var(--ec-brand-subtle)', color: 'var(--ec-brand)', border: '1px solid var(--ec-brand-border)', flexShrink: 0 }}>
+                                  {r.guestCount ?? 1} {(r.guestCount ?? 1) === 1 ? 'guest' : 'guests'}
+                                </span>
+                                <button
+                                  onClick={() => deleteRsvp(ev.eventId, r.rsvpId)}
+                                  disabled={deletingRsvp === r.rsvpId}
+                                  style={{ background: 'none', border: 'none', color: 'var(--ec-danger)', cursor: 'pointer', fontSize: 16, padding: '0 4px', flexShrink: 0, opacity: deletingRsvp === r.rsvpId ? 0.4 : 1 }}
+                                  title="Remove RSVP"
+                                >×</button>
                               </div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--ec-text-1)' }}>{r.name}</p>
-                                <p style={{ fontSize: 11, color: 'var(--ec-text-3)' }}>{r.email}</p>
-                              </div>
-                              <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 8, background: r.response === 'yes' ? 'var(--ec-success-bg)' : r.response === 'no' ? 'var(--ec-danger-bg)' : 'var(--ec-warning-bg)', color: r.response === 'yes' ? 'var(--ec-success)' : r.response === 'no' ? 'var(--ec-danger)' : 'var(--ec-warning)', border: `1px solid ${r.response === 'yes' ? 'var(--ec-success-border)' : r.response === 'no' ? 'var(--ec-danger-border)' : 'var(--ec-warning-border)'}` }}>
-                                {r.response}
-                              </span>
-                              {r.message && <p style={{ fontSize: 11, color: 'var(--ec-text-3)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.message}</p>}
+                              {r.message && (
+                                <p style={{ fontSize: 12, color: 'var(--ec-text-3)', marginTop: 6, paddingLeft: 40, lineHeight: 1.4 }}>{r.message}</p>
+                              )}
                             </div>
                           ))}
                         </div>

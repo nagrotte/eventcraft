@@ -15,18 +15,18 @@ interface PublicEvent {
 }
 
 export default function RsvpPage() {
-  const { eventId }           = useParams<{ eventId: string }>();
-  const [event, setEvent]     = useState<PublicEvent | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [step, setStep]       = useState<'view' | 'form' | 'done'>('view');
-  const [name, setName]       = useState('');
-  const [email, setEmail]     = useState('');
+  const { eventId }             = useParams<{ eventId: string }>();
+  const [event, setEvent]       = useState<PublicEvent | null>(null);
+  const [loading, setLoading]   = useState(true);
+  const [step, setStep]         = useState<'view' | 'form' | 'done'>('view');
+  const [name, setName]         = useState('');
+  const [email, setEmail]       = useState('');
   const [response, setResponse] = useState<'yes' | 'no' | 'maybe'>('yes');
-  const [message, setMessage] = useState('');
+  const [guestCount, setGuestCount] = useState(1);
+  const [message, setMessage]   = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError]     = useState('');
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [error, setError]       = useState('');
+  const canvasRef               = useRef<HTMLCanvasElement>(null);
   const [canvasScale, setCanvasScale] = useState(1);
   const apiBase = process.env.NEXT_PUBLIC_API_URL ?? '';
 
@@ -45,7 +45,6 @@ export default function RsvpPage() {
     load();
   }, [eventId]);
 
-  // Calculate scale to fit canvas in container
   useEffect(() => {
     function calcScale() {
       const vw = Math.min(window.innerWidth, 640) - 32;
@@ -79,7 +78,7 @@ export default function RsvpPage() {
       const res = await fetch(`${apiBase}/events/${eventId}/rsvp`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ name, email, response, message }),
+        body:    JSON.stringify({ name, email, response, message, guestCount }),
       });
       if (!res.ok) throw new Error('Failed');
       setStep('done');
@@ -119,13 +118,13 @@ export default function RsvpPage() {
 
       <div style={{ maxWidth: 640, margin: '0 auto', padding: '16px' }}>
 
-        {/* Canvas design — scaled to fit mobile */}
+        {/* Canvas design — centered on mobile */}
         {event?.canvasJson && (
-          <div style={{ width: '100%', marginBottom: 24, overflow: 'hidden', borderRadius: 4, boxShadow: '0 8px 40px rgba(0,0,0,0.6)' }}>
+          <div style={{ width: '100%', marginBottom: 24, overflow: 'hidden', borderRadius: 4, boxShadow: '0 8px 40px rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center' }}>
             <div style={{
               width: 600,
               height: 850,
-              transformOrigin: 'top left',
+              transformOrigin: 'top center',
               transform: `scale(${canvasScale})`,
               marginBottom: -(850 * (1 - canvasScale)),
             }}>
@@ -136,9 +135,7 @@ export default function RsvpPage() {
 
         {/* Event details */}
         <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: 20, marginBottom: 16 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#fff', marginBottom: 12, lineHeight: 1.2 }}>
-            {event?.title}
-          </h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#fff', marginBottom: 12, lineHeight: 1.2 }}>{event?.title}</h1>
           {formattedDate && (
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
               <svg width="15" height="15" viewBox="0 0 15 15" fill="none" style={{ flexShrink: 0, marginTop: 2 }}>
@@ -170,6 +167,7 @@ export default function RsvpPage() {
           <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: 20 }}>
             <h2 style={{ fontSize: 18, fontWeight: 600, color: '#fff', marginBottom: 16 }}>Your RSVP</h2>
 
+            {/* Response buttons */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
               {(['yes', 'no', 'maybe'] as const).map(r => (
                 <button key={r} onClick={() => setResponse(r)} style={{
@@ -177,8 +175,7 @@ export default function RsvpPage() {
                   border: `1px solid ${response === r ? '#6366F1' : 'rgba(255,255,255,0.1)'}`,
                   background: response === r ? 'rgba(99,102,241,0.2)' : 'transparent',
                   color: response === r ? '#6366F1' : '#999',
-                  cursor: 'pointer', fontSize: 13, fontWeight: response === r ? 600 : 400,
-                  fontFamily: 'inherit',
+                  cursor: 'pointer', fontSize: 13, fontWeight: response === r ? 600 : 400, fontFamily: 'inherit',
                 }}>
                   {r === 'yes' ? 'Yes' : r === 'no' ? 'No' : 'Maybe'}
                 </button>
@@ -193,6 +190,23 @@ export default function RsvpPage() {
               <label style={{ fontSize: 12, color: '#999', display: 'block', marginBottom: 6 }}>Email *</label>
               <input value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" type="email" style={inp} />
             </div>
+
+            {/* Guest count */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 12, color: '#999', display: 'block', marginBottom: 6 }}>Number of guests attending (including yourself)</label>
+              <div style={{ display: 'flex', alignItems: 'center', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, overflow: 'hidden' }}>
+                <button
+                  onClick={() => setGuestCount(g => Math.max(1, g - 1))}
+                  style={{ width: 44, height: 42, background: 'rgba(255,255,255,0.06)', border: 'none', color: '#fff', fontSize: 20, cursor: 'pointer', flexShrink: 0 }}
+                >−</button>
+                <span style={{ flex: 1, textAlign: 'center', color: '#fff', fontSize: 15, fontWeight: 500 }}>{guestCount}</span>
+                <button
+                  onClick={() => setGuestCount(g => Math.min(20, g + 1))}
+                  style={{ width: 44, height: 42, background: 'rgba(255,255,255,0.06)', border: 'none', color: '#fff', fontSize: 20, cursor: 'pointer', flexShrink: 0 }}
+                >+</button>
+              </div>
+            </div>
+
             <div style={{ marginBottom: 16 }}>
               <label style={{ fontSize: 12, color: '#999', display: 'block', marginBottom: 6 }}>Message (optional)</label>
               <textarea value={message} onChange={e => setMessage(e.target.value)} placeholder="Add a note..." rows={3} style={{ ...inp, resize: 'none' }} />

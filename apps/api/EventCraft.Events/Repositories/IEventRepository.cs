@@ -12,6 +12,7 @@ public interface IEventRepository
     Task                                 DeleteAsync(string eventId, CancellationToken ct = default);
     Task                                 SaveRsvpAsync(string eventId, RsvpRequest rsvp, CancellationToken ct = default);
     Task<List<RsvpEntity>>               ListRsvpsAsync(string eventId, CancellationToken ct = default);
+    Task                                 DeleteRsvpAsync(string eventId, string rsvpId, CancellationToken ct = default);
     Task<List<ContactEntity>>            ListContactsAsync(string userId, CancellationToken ct = default);
     Task<ContactEntity>                  CreateContactAsync(string userId, CreateContactRequest req, CancellationToken ct = default);
     Task                                 DeleteContactAsync(string userId, string contactId, CancellationToken ct = default);
