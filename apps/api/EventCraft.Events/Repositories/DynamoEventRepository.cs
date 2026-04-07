@@ -288,7 +288,8 @@ public class DynamoEventRepository : IEventRepository
         OrganizerName  = item.TryGetValue("organizerName",  out var on2) ? on2.S : null,
         OrganizerPhone = item.TryGetValue("organizerPhone", out var op)  ? op.S  : null,
         OrganizerEmail = item.TryGetValue("organizerEmail", out var oe)  ? oe.S  : null,
-        GalleryUrl     = item.TryGetValue("galleryUrl",     out var gu)  ? gu.S  : null,
+        GalleryUrl        = item.TryGetValue("galleryUrl",        out var gu)  ? gu.S  : null,
+        ReminderSchedule  = item.TryGetValue("reminderSchedule",  out var rs)  ? rs.S  : null,
         CreatedAt      = item["createdAt"].S,
         UpdatedAt      = item.TryGetValue("updatedAt",      out var ua)  ? ua.S  : "",
     };
@@ -329,7 +330,8 @@ public class DynamoEventRepository : IEventRepository
         if (e.OrganizerName  is not null) item["organizerName"]  = new() { S = e.OrganizerName };
         if (e.OrganizerPhone is not null) item["organizerPhone"] = new() { S = e.OrganizerPhone };
         if (e.OrganizerEmail is not null) item["organizerEmail"] = new() { S = e.OrganizerEmail };
-        if (e.GalleryUrl     is not null) item["galleryUrl"]     = new() { S = e.GalleryUrl };
+        if (e.GalleryUrl       is not null) item["galleryUrl"]       = new() { S = e.GalleryUrl };
+        if (e.ReminderSchedule is not null) item["reminderSchedule"] = new() { S = e.ReminderSchedule };
         return item;
     }
 
@@ -395,6 +397,14 @@ public class DynamoEventRepository : IEventRepository
         CreatedAt = item.TryGetValue("createdAt", out var ca)  ? ca.S   : "",
     };
 
+    public async Task<List<RsvpEntity>> ListRsvpsByResponseAsync(
+        string eventId, IEnumerable<string> responses, CancellationToken ct = default)
+    {
+        var all = await ListRsvpsAsync(eventId, ct);
+        var set = new HashSet<string>(responses, StringComparer.OrdinalIgnoreCase);
+        return all.Where(r => set.Contains(r.Response)).ToList();
+    }
+
     public async Task DeleteRsvpAsync(string eventId, string rsvpId, CancellationToken ct = default)
     {
         await _dynamo.DeleteItemAsync(new DeleteItemRequest
@@ -408,4 +418,54 @@ public class DynamoEventRepository : IEventRepository
         }, ct);
         _log.LogInformation("RSVP deleted: {RsvpId} from event {EventId}", rsvpId, eventId);
     }
+    public async Task<ReminderLog> SaveReminderLogAsync(ReminderLog log, CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow.ToString("O");
+        log.ReminderLogId = log.ReminderLogId ?? Guid.NewGuid().ToString("N");
+        log.SentAt        = now;
+        var item = new Dictionary<string, AttributeValue>
+        {
+            ["PK"]            = new() { S = $"EVENT#{log.EventId}" },
+            ["SK"]            = new() { S = $"REMINDERLOG#{log.ReminderLogId}" },
+            ["reminderLogId"] = new() { S = log.ReminderLogId },
+            ["eventId"]       = new() { S = log.EventId },
+            ["triggerType"]   = new() { S = log.TriggerType },
+            ["audience"]      = new() { S = log.Audience },
+            ["sentCount"]     = new() { N = log.SentCount.ToString() },
+            ["failedCount"]   = new() { N = log.FailedCount.ToString() },
+            ["sentAt"]        = new() { S = log.SentAt },
+        };
+        if (log.DaysBefore.HasValue)
+            item["daysBefore"] = new() { N = log.DaysBefore.Value.ToString() };
+        await _dynamo.PutItemAsync(new PutItemRequest { TableName = _table, Item = item }, ct);
+        _log.LogInformation("ReminderLog saved: {LogId} for event {EventId}", log.ReminderLogId, log.EventId);
+        return log;
+    }
+
+    public async Task<List<ReminderLog>> ListReminderLogsAsync(string eventId, CancellationToken ct = default)
+    {
+        var response = await _dynamo.QueryAsync(new QueryRequest
+        {
+            TableName              = _table,
+            KeyConditionExpression = "PK = :pk AND begins_with(SK, :prefix)",
+            ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+            {
+                [":pk"]     = new() { S = $"EVENT#{eventId}" },
+                [":prefix"] = new() { S = "REMINDERLOG#" }
+            },
+            ScanIndexForward = false
+        }, ct);
+        return response.Items.Select(item => new ReminderLog
+        {
+            ReminderLogId = item.TryGetValue("reminderLogId", out var lid) ? lid.S : "",
+            EventId       = eventId,
+            TriggerType   = item.TryGetValue("triggerType",   out var tt)  ? tt.S  : "",
+            Audience      = item.TryGetValue("audience",      out var au)  ? au.S  : "",
+            SentCount     = item.TryGetValue("sentCount",     out var sc)  && int.TryParse(sc.N, out var sv) ? sv : 0,
+            FailedCount   = item.TryGetValue("failedCount",   out var fc)  && int.TryParse(fc.N, out var fv) ? fv : 0,
+            SentAt        = item.TryGetValue("sentAt",        out var sa)  ? sa.S  : "",
+            DaysBefore    = item.TryGetValue("daysBefore",    out var db)  && int.TryParse(db.N, out var dv) ? dv : null,
+        }).ToList();
+    }
+
 }

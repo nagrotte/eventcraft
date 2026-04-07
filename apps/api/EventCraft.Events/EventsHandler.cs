@@ -99,6 +99,8 @@ public class EventsHandler
             if (method == "DELETE" && path.Contains("/rsvp/"))                                    return await DeleteRsvp(request);
             if (method == "GET"  && path.StartsWith("/events/") && path.EndsWith("/public"))       return await GetPublicEvent(request);
             if (method == "POST" && path.StartsWith("/events/") && path.EndsWith("/invite/email")) return await SendEmailInvites(request);
+            if (method == "POST" && path.StartsWith("/events/") && path.EndsWith("/reminders/send")) return await SendReminders(request);
+            if (method == "GET"  && path.StartsWith("/events/") && path.EndsWith("/reminders"))      return await GetReminderLogs(request);
 
             if (method == "GET"    && path.StartsWith("/events/")) return await GetEvent(request);
             if (method == "PUT"    && path.StartsWith("/events/") && path.EndsWith("/publish"))    return await PublishEvent(request);
@@ -454,6 +456,223 @@ public class EventsHandler
     // ── Email template ────────────────────────────────────────────────────────
     // Personal invitation. Text-only wordmark (SVG stripped by Gmail/Outlook).
     // Description included. eventcraft credit is subtle footer only.
+
+    private async Task<APIGatewayProxyResponse> SendReminders(APIGatewayProxyRequest req)
+    {
+        var userId = GetUserId(req);
+        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+
+        var eventId = GetSegment(req.Path, 1);
+        var repo    = _services.GetRequiredService<IEventRepository>();
+        var ev      = await repo.GetByIdAsync(eventId);
+        if (ev is null || ev.UserId != userId) return NotFoundResponse();
+
+        var body     = Deserialize<SendReminderRequest>(req.Body);
+        var audience = body?.Audience ?? "yes";
+
+        List<RsvpEntity> rsvps;
+        if (body?.RsvpIds != null && body.RsvpIds.Count > 0)
+        {
+            var all = await repo.ListRsvpsAsync(eventId);
+            var ids = new HashSet<string>(body.RsvpIds);
+            rsvps = all.Where(r => ids.Contains(r.RsvpId)).ToList();
+        }
+        else
+        {
+            var responses = audience switch
+            {
+                "yes_maybe" => new[] { "yes", "maybe" },
+                "all"       => new[] { "yes", "maybe", "no" },
+                _           => new[] { "yes" }
+            };
+            rsvps = await repo.ListRsvpsByResponseAsync(eventId, responses);
+        }
+
+        var appUrl  = Environment.GetEnvironmentVariable("APP_URL") ?? "https://eventcraft.irotte.com";
+        var rsvpUrl = !string.IsNullOrEmpty(ev.MicrositeSlug)
+            ? $"{appUrl}/e/{ev.MicrositeSlug}"
+            : $"{appUrl}/rsvp/{eventId}";
+
+        var formattedDate = DateTime.TryParse(ev.EventDate, out var dt)
+            ? dt.ToString("dddd, MMMM d, yyyy \\a\\t h:mm tt")
+            : ev.EventDate;
+
+        var ses    = new AmazonSimpleEmailServiceClient(Amazon.RegionEndpoint.USEast1);
+        var sent   = new List<string>();
+        var failed = new List<string>();
+
+        foreach (var rsvp in rsvps)
+        {
+            if (string.IsNullOrEmpty(rsvp.Email)) continue;
+            var html = BuildReminderHtml(
+                rsvp.Name, ev.Title, formattedDate,
+                ev.Location ?? "", FormatSchedule(ev.Schedule),
+                ev.OrganizerName ?? "", ev.OrganizerPhone ?? "", ev.OrganizerEmail ?? "",
+                rsvpUrl);
+            try
+            {
+                var fromName = !string.IsNullOrEmpty(ev.OrganizerName) ? ev.OrganizerName : "EventCraft";
+                await ses.SendEmailAsync(new SendEmailRequest
+                {
+                    Source      = $"{fromName} <noreply@pragmaticconsulting.net>",
+                    Destination = new Destination { ToAddresses = new List<string> { rsvp.Email } },
+                    Message     = new Message
+                    {
+                        Subject = new Content($"Event Reminder: {ev.Title} is coming up"),
+                        Body    = new Body { Html = new Content(html) }
+                    }
+                });
+                sent.Add(rsvp.Email);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Reminder failed for {rsvp.Email}: {ex.Message}");
+                failed.Add(rsvp.Email);
+            }
+        }
+
+        // Log it
+        await repo.SaveReminderLogAsync(new ReminderLog
+        {
+            EventId     = eventId,
+            TriggerType = "manual",
+            Audience    = audience,
+            SentCount   = sent.Count,
+            FailedCount = failed.Count,
+        });
+
+        return OkResponse(ApiResponse<object>.Ok(new { sent, failed, total = rsvps.Count }));
+    }
+
+    private async Task<APIGatewayProxyResponse> GetReminderLogs(APIGatewayProxyRequest req)
+    {
+        var userId = GetUserId(req);
+        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+        var eventId = GetSegment(req.Path, 1);
+        var repo    = _services.GetRequiredService<IEventRepository>();
+        var ev      = await repo.GetByIdAsync(eventId);
+        if (ev is null || ev.UserId != userId) return NotFoundResponse();
+        var logs = await repo.ListReminderLogsAsync(eventId);
+        return OkResponse(ApiResponse<object>.Ok(logs));
+    }
+
+
+    private static string FormatSchedule(string? scheduleJson)
+    {
+        if (string.IsNullOrWhiteSpace(scheduleJson)) return "";
+        try
+        {
+            var items = System.Text.Json.JsonSerializer.Deserialize<List<System.Text.Json.JsonElement>>(scheduleJson);
+            if (items is null) return "";
+            var lines = items.Select(item =>
+            {
+                var time = item.TryGetProperty("time", out var t) ? t.GetString() ?? "" : "";
+                var desc = item.TryGetProperty("description", out var d) ? d.GetString() ?? "" : "";
+                return string.IsNullOrEmpty(time) ? desc : $"{time} — {desc}";
+            });
+            return string.Join("\n", lines);
+        }
+        catch { return scheduleJson ?? ""; }
+    }
+
+        private static string BuildReminderHtml(
+        string guestName,
+        string title,
+        string date,
+        string location,
+        string schedule,
+        string organizer,
+        string organizerPhone,
+        string organizerEmail,
+        string rsvpUrl)
+    {
+        var locationRow = string.IsNullOrEmpty(location) ? "" : $@"
+      <tr>
+        <td width='26' valign='top' style='padding-top:2px;font-size:14px'>&#128205;</td>
+        <td style='padding-bottom:10px'>
+          <div style='font-size:13px;color:#d1d5db;font-family:Helvetica,Arial,sans-serif'>{location}</div>
+        </td>
+      </tr>";
+
+        var scheduleBlock = "";
+        if (!string.IsNullOrWhiteSpace(schedule))
+        {
+            scheduleBlock = $@"
+    <div style='margin-bottom:20px'>
+      <p style='font-size:12px;font-weight:600;color:#9ca3af;letter-spacing:0.08em;text-transform:uppercase;margin:0 0 8px 0;font-family:Helvetica,Arial,sans-serif'>Schedule</p>
+      <p style='font-size:13px;color:#d1d5db;margin:0;font-family:Helvetica,Arial,sans-serif;white-space:pre-line'>{schedule}</p>
+    </div>";
+        }
+
+        var contactRow = "";
+        if (!string.IsNullOrEmpty(organizerPhone) || !string.IsNullOrEmpty(organizerEmail))
+        {
+            var pts = new List<string>();
+            if (!string.IsNullOrEmpty(organizerPhone)) pts.Add(organizerPhone);
+            if (!string.IsNullOrEmpty(organizerEmail)) pts.Add(organizerEmail);
+            contactRow = $"<p style='font-size:12px;color:#6b7280;margin:0 0 20px 0;font-family:Helvetica,Arial,sans-serif'>Questions? {string.Join(" &middot; ", pts)}</p>";
+        }
+
+        var hostLine = string.IsNullOrEmpty(organizer) ? "" :
+            $"<p style='font-size:14px;color:#9ca3af;margin:0 0 22px 0;font-family:Helvetica,Arial,sans-serif'>Hosted by <span style='color:#e5e7eb;font-weight:500'>{organizer}</span></p>";
+
+        return $@"<!DOCTYPE html>
+<html lang='en'>
+<head>
+  <meta charset='utf-8'>
+  <meta name='viewport' content='width=device-width,initial-scale=1'>
+  <title>Reminder: {title}</title>
+</head>
+<body style='margin:0;padding:0;background:#111827;font-family:Georgia,serif;color:#f9fafb'>
+  <div style='max-width:520px;margin:0 auto;padding:40px 28px 32px'>
+
+    <div style='text-align:center;margin-bottom:28px'>
+      <a href='https://eventcraft.irotte.com' style='text-decoration:none'>
+        <span style='font-size:15px;font-weight:600;color:#ffffff;font-family:Georgia,serif'>event</span><span style='font-size:15px;font-weight:600;color:#D4AF37;font-family:Georgia,serif'>craft</span>
+      </a>
+    </div>
+
+    <div style='background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:10px 16px;margin-bottom:24px;text-align:center'>
+      <p style='font-size:12px;font-weight:600;color:#D4AF37;letter-spacing:0.1em;text-transform:uppercase;margin:0;font-family:Helvetica,Arial,sans-serif'>Event Reminder</p>
+    </div>
+
+    <p style='font-size:14px;color:#9ca3af;margin:0 0 6px 0;font-family:Helvetica,Arial,sans-serif'>Dear {guestName},</p>
+    <p style='font-size:14px;color:#d1d5db;margin:0 0 28px 0;font-family:Helvetica,Arial,sans-serif;line-height:1.6'>This is a friendly reminder that the event is coming up soon. We look forward to seeing you!</p>
+
+    <h1 style='font-size:28px;font-weight:700;color:#ffffff;margin:0 0 6px 0;line-height:1.2;font-family:Georgia,serif;letter-spacing:-0.02em'>{title}</h1>
+
+    {hostLine}
+
+    <div style='height:1px;background:rgba(212,175,55,0.4);margin-bottom:20px'></div>
+
+    <table width='100%' cellpadding='0' cellspacing='0' border='0' style='margin-bottom:16px'>
+      <tr>
+        <td width='26' valign='top' style='padding-top:2px;font-size:14px'>&#128197;</td>
+        <td style='padding-bottom:10px'>
+          <div style='font-size:13px;color:#d1d5db;font-family:Helvetica,Arial,sans-serif'>{date}</div>
+        </td>
+      </tr>
+      {locationRow}
+    </table>
+
+    {scheduleBlock}
+
+    {contactRow}
+
+    <div style='margin:24px 0 16px'>
+      <a href='{rsvpUrl}' style='display:inline-block;background:#4F46E5;color:#ffffff;text-decoration:none;padding:13px 40px;border-radius:8px;font-size:15px;font-weight:600;font-family:Helvetica,Arial,sans-serif'>View Event &amp; Update RSVP</a>
+    </div>
+
+    <p style='font-size:12px;color:#374151;margin:0 0 32px 0;font-family:Helvetica,Arial,sans-serif'><a href='{rsvpUrl}' style='color:#6366F1'>{rsvpUrl}</a></p>
+
+    <div style='border-top:1px solid rgba(255,255,255,0.05);padding-top:14px'>
+      <p style='font-size:11px;color:rgba(255,255,255,0.15);margin:0;font-family:Helvetica,Arial,sans-serif'>Sent via <span style='color:rgba(255,255,255,0.25)'>eventcraft</span></p>
+    </div>
+
+  </div>
+</body>
+</html>";
+    }
 
     private static string BuildEmailHtml(
         string guestName,

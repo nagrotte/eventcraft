@@ -29,4 +29,24 @@ public class EventEntity
     public string? OrganizerPhone { get; set; }
     public string? OrganizerEmail { get; set; }
     public string? GalleryUrl     { get; set; }
+    // Reminder schedule: stored as JSON string, list of ReminderScheduleItem
+    public string? ReminderSchedule { get; set; }
+}
+
+public class ReminderScheduleItem
+{
+    public int    DaysBefore { get; set; }
+    public string Audience   { get; set; } = "yes"; // yes | yes_maybe | all
+}
+
+public class ReminderLog
+{
+    public string ReminderLogId { get; set; } = default!;
+    public string EventId       { get; set; } = default!;
+    public string TriggerType   { get; set; } = default!; // manual | scheduled
+    public string Audience      { get; set; } = default!;
+    public int    SentCount     { get; set; }
+    public int    FailedCount   { get; set; }
+    public string SentAt        { get; set; } = default!;
+    public int?   DaysBefore    { get; set; }
 }

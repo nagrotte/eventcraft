@@ -10,6 +10,8 @@ import { useEffect, useRef, useState } from 'react';
 import apiClient from '@/lib/api-client';
 
 interface ScheduleItem { time: string; description: string; }
+interface ReminderScheduleItem { daysBefore: number; audience: 'yes' | 'yes_maybe' | 'all'; }
+interface ReminderLog { reminderLogId: string; triggerType: string; audience: string; sentCount: number; failedCount: number; sentAt: string; daysBefore?: number; }
 
 interface UploadState {
   file:     File;
@@ -33,7 +35,11 @@ export default function EventSettingsPage() {
   const [organizerPhone, setOrganizerPhone] = useState('');
   const [organizerEmail, setOrganizerEmail] = useState('');
   const [galleryUrl,     setGalleryUrl]     = useState('');
-  const [schedule,       setSchedule]       = useState<ScheduleItem[]>([]);
+  const [schedule,          setSchedule]          = useState<ScheduleItem[]>([]);
+  const [reminderSchedule,  setReminderSchedule]  = useState<ReminderScheduleItem[]>([]);
+  const [reminderLogs,      setReminderLogs]      = useState<ReminderLog[]>([]);
+  const [activeTab,         setActiveTab]         = useState<'details' | 'reminders'>('details');
+  const [loadingLogs,       setLoadingLogs]       = useState(false);
 
   const [saving,      setSaving]      = useState(false);
   const [saved,       setSaved]       = useState(false);
@@ -72,6 +78,8 @@ export default function EventSettingsPage() {
     }
     try { setSchedule(event.schedule ? JSON.parse(event.schedule) : []); }
     catch { setSchedule([]); }
+    try { setReminderSchedule(event.reminderSchedule ? JSON.parse(event.reminderSchedule) : []); }
+    catch { setReminderSchedule([]); }
   }, [event]);
 
   function suggestSlug(t: string) {
@@ -105,7 +113,8 @@ export default function EventSettingsPage() {
         organizerPhone: organizerPhone || undefined,
         organizerEmail: organizerEmail || undefined,
         galleryUrl:     gUrl ?? galleryUrl ?? undefined,
-        schedule:       schedule.length > 0 ? JSON.stringify(schedule) : undefined,
+        schedule:          schedule.length > 0 ? JSON.stringify(schedule) : undefined,
+        reminderSchedule:  reminderSchedule.length > 0 ? reminderSchedule : undefined,
       });
       await refetch();
       setSaved(true);
@@ -204,6 +213,24 @@ export default function EventSettingsPage() {
 
     // Reset file input
     if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  function addReminderItem() {
+    setReminderSchedule(prev => [...prev, { daysBefore: 3, audience: 'yes' }]);
+  }
+  function updateReminderItem(i: number, field: keyof ReminderScheduleItem, val: string | number) {
+    setReminderSchedule(prev => prev.map((item, idx) => idx === i ? { ...item, [field]: val } : item));
+  }
+  function removeReminderItem(i: number) {
+    setReminderSchedule(prev => prev.filter((_, idx) => idx !== i));
+  }
+  async function loadReminderLogs() {
+    setLoadingLogs(true);
+    try {
+      const res = await apiClient.get(`/events/${eventId}/reminders`);
+      setReminderLogs(res.data.data ?? []);
+    } catch { }
+    finally { setLoadingLogs(false); }
   }
 
   const isPublished = event?.status === 'published';
@@ -484,6 +511,94 @@ export default function EventSettingsPage() {
             )}
           </div>
         </div>
+
+
+        {/* Tab switcher */}
+        <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--ec-border)', marginBottom: 20 }}>
+          {(['details', 'reminders'] as const).map(tab => (
+            <button key={tab} onClick={() => { setActiveTab(tab); if (tab === 'reminders') loadReminderLogs(); }}
+              style={{ padding: '8px 18px', fontSize: 13, fontWeight: activeTab === tab ? 600 : 400, color: activeTab === tab ? 'var(--ec-text-1)' : 'var(--ec-text-3)', borderTop: 'none', borderLeft: 'none', borderRight: 'none', borderBottom: activeTab === tab ? '2px solid var(--ec-brand)' : '2px solid transparent', background: 'none', cursor: 'pointer', fontFamily: 'inherit', marginBottom: -1 }}>
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'reminders' && (
+          <div>
+            {/* Reminder schedule config */}
+            <div style={sectionStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <span style={labelStyle}>Automatic Reminder Schedule</span>
+                <EcButton size="sm" variant="ghost" onClick={addReminderItem}>+ Add reminder</EcButton>
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--ec-text-3)', marginBottom: 16, lineHeight: 1.5 }}>
+                Reminders fire automatically at 9am CST on the configured day. Each reminder has its own audience.
+              </p>
+              {reminderSchedule.length === 0 ? (
+                <p style={{ fontSize: 13, color: 'var(--ec-text-3)', textAlign: 'center', padding: '16px 0' }}>
+                  No reminders scheduled. Click "+ Add reminder" to set one up.
+                </p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {reminderSchedule.map((item, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--ec-card)', borderRadius: 'var(--ec-radius-sm)', padding: '10px 12px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 12, color: 'var(--ec-text-3)', minWidth: 20 }}>{i + 1}.</span>
+                      <select
+                        value={item.daysBefore}
+                        onChange={e => updateReminderItem(i, 'daysBefore', parseInt(e.target.value))}
+                        style={{ fontSize: 12, padding: '5px 8px', borderRadius: 'var(--ec-radius-sm)', border: '1px solid var(--ec-border)', background: 'var(--ec-surface)', color: 'var(--ec-text-1)', fontFamily: 'inherit', width: 72 }}
+                      >
+                        {[1, 2, 3, 5, 7, 10, 14].map(d => <option key={d} value={d}>{d}</option>)}
+                      </select>
+                      <span style={{ fontSize: 12, color: 'var(--ec-text-3)' }}>days before · audience</span>
+                      <select
+                        value={item.audience}
+                        onChange={e => updateReminderItem(i, 'audience', e.target.value)}
+                        style={{ fontSize: 12, padding: '5px 8px', borderRadius: 'var(--ec-radius-sm)', border: '1px solid var(--ec-border)', background: 'var(--ec-surface)', color: 'var(--ec-text-1)', fontFamily: 'inherit', flex: 1 }}
+                      >
+                        <option value="yes">Yes RSVPs only</option>
+                        <option value="yes_maybe">Yes + Maybe RSVPs</option>
+                        <option value="all">All RSVPs</option>
+                      </select>
+                      <button onClick={() => removeReminderItem(i)}
+                        style={{ background: 'none', border: 'none', color: 'var(--ec-text-3)', cursor: 'pointer', fontSize: 16, padding: '0 4px' }}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--ec-border)' }}>
+                {saved && <span style={{ fontSize: 12, color: 'var(--ec-success)', marginRight: 12, alignSelf: 'center' }}>✓ Saved</span>}
+                <EcButton size="sm" loading={saving} onClick={() => save()}>Save reminder schedule</EcButton>
+              </div>
+            </div>
+
+            {/* Reminder history */}
+            <div style={sectionStyle}>
+              <span style={labelStyle}>Reminder History</span>
+              {loadingLogs ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><div className="ec-spinner" /></div>
+              ) : reminderLogs.length === 0 ? (
+                <p style={{ fontSize: 13, color: 'var(--ec-text-3)', textAlign: 'center', padding: '16px 0' }}>No reminders sent yet.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {reminderLogs.map(log => (
+                    <div key={log.reminderLogId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--ec-card)', borderRadius: 'var(--ec-radius-sm)', padding: '10px 12px' }}>
+                      <div>
+                        <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--ec-text-1)', margin: 0 }}>
+                          {log.triggerType === 'scheduled' ? `${log.daysBefore} days before (auto)` : 'Manual reminder'}
+                        </p>
+                        <p style={{ fontSize: 12, color: 'var(--ec-text-3)', margin: 0 }}>
+                          {log.audience} · {log.sentCount} sent{log.failedCount > 0 ? ` · ${log.failedCount} failed` : ''} · {new Date(log.sentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </p>
+                      </div>
+                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 8, background: 'var(--ec-success-bg)', color: 'var(--ec-success)', border: '1px solid var(--ec-success-border)' }}>sent</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
       </main>
     </div>

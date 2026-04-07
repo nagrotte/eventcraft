@@ -21,6 +21,14 @@ interface RsvpEntry {
   guestCount: number;
 }
 
+type ReminderAudience = 'yes' | 'yes_maybe' | 'specific';
+
+interface ReminderModal {
+  eventId:  string;
+  title:    string;
+  rsvps:    RsvpEntry[];
+}
+
 export default function DashboardPage() {
   const { user, loading: authLoading, logout, isAdmin } = useAuth();
   const router = useRouter();
@@ -38,6 +46,15 @@ export default function DashboardPage() {
   const [rsvpData,     setRsvpData]     = useState<Record<string, RsvpEntry[]>>({});
   const [rsvpLoading,  setRsvpLoading]  = useState<string | null>(null);
   const [deletingRsvp, setDeletingRsvp] = useState<string | null>(null);
+  const [reminderToast, setReminderToast] = useState<string | null>(null);
+
+  // Reminder modal state
+  const [reminderModal,    setReminderModal]    = useState<ReminderModal | null>(null);
+  const [reminderAudience, setReminderAudience] = useState<ReminderAudience>('yes');
+  const [selectedRsvpIds,  setSelectedRsvpIds]  = useState<Set<string>>(new Set());
+  const [guestSearch,      setGuestSearch]      = useState('');
+  const [reminderSending,  setReminderSending]  = useState(false);
+  const [loadingReminderRsvps, setLoadingReminderRsvps] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/auth/login');
@@ -78,10 +95,92 @@ export default function DashboardPage() {
     finally { setDeletingRsvp(null); }
   }
 
+  async function openReminderModal(eventId: string, eventTitle: string) {
+    setLoadingReminderRsvps(true);
+    setReminderAudience('yes');
+    setGuestSearch('');
+    try {
+      let rsvps = rsvpData[eventId];
+      if (!rsvps) {
+        const res = await apiClient.get(`/events/${eventId}/rsvp`);
+        rsvps = res.data.data ?? [];
+        setRsvpData(prev => ({ ...prev, [eventId]: rsvps! }));
+      }
+      const defaultSelected = new Set(rsvps.filter(r => r.response === 'yes').map(r => r.rsvpId));
+      setSelectedRsvpIds(defaultSelected);
+      setReminderModal({ eventId, title: eventTitle, rsvps });
+    } catch { alert('Failed to load RSVPs'); }
+    finally { setLoadingReminderRsvps(false); }
+  }
+
+  function closeReminderModal() {
+    setReminderModal(null);
+    setReminderAudience('yes');
+    setSelectedRsvpIds(new Set());
+    setGuestSearch('');
+  }
+
+  function toggleRsvpSelection(rsvpId: string) {
+    setSelectedRsvpIds(prev => {
+      const next = new Set(prev);
+      next.has(rsvpId) ? next.delete(rsvpId) : next.add(rsvpId);
+      return next;
+    });
+  }
+
+  function selectQuick(type: 'all' | 'yes' | 'yes_maybe' | 'none') {
+    if (!reminderModal) return;
+    const ids = reminderModal.rsvps
+      .filter(r => {
+        if (type === 'all')      return true;
+        if (type === 'none')     return false;
+        if (type === 'yes')      return r.response === 'yes';
+        if (type === 'yes_maybe') return r.response === 'yes' || r.response === 'maybe';
+        return false;
+      })
+      .map(r => r.rsvpId);
+    setSelectedRsvpIds(new Set(ids));
+  }
+
+  async function sendReminder() {
+    if (!reminderModal) return;
+    setReminderSending(true);
+    try {
+      const body: { audience: string; rsvpIds?: string[] } =
+        reminderAudience === 'specific'
+          ? { audience: 'specific', rsvpIds: Array.from(selectedRsvpIds) }
+          : { audience: reminderAudience };
+
+      const res = await apiClient.post(`/events/${reminderModal.eventId}/reminders/send`, body);
+      const { sent, failed } = res.data?.data ?? res.data ?? {};
+      closeReminderModal();
+      setReminderToast(`Reminder sent to ${sent?.length ?? 0} guests${failed?.length ? `, ${failed.length} failed` : ''}`);
+      setTimeout(() => setReminderToast(null), 5000);
+    } catch { alert('Failed to send reminders'); }
+    finally { setReminderSending(false); }
+  }
+
   async function copyRsvpLink(eventId: string) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://eventcraft.irotte.com';
     await navigator.clipboard.writeText(`${appUrl}/rsvp/${eventId}`);
   }
+
+  // Computed values for reminder modal
+  const filteredRsvps = reminderModal?.rsvps.filter(r =>
+    !guestSearch || r.name.toLowerCase().includes(guestSearch.toLowerCase()) || r.email.toLowerCase().includes(guestSearch.toLowerCase())
+  ) ?? [];
+
+  const audienceCounts = reminderModal ? {
+    yes:      reminderModal.rsvps.filter(r => r.response === 'yes').length,
+    yes_maybe: reminderModal.rsvps.filter(r => r.response === 'yes' || r.response === 'maybe').length,
+    specific: selectedRsvpIds.size,
+  } : { yes: 0, yes_maybe: 0, specific: 0 };
+
+  const expectedAttendees = reminderAudience === 'specific'
+    ? reminderModal?.rsvps.filter(r => selectedRsvpIds.has(r.rsvpId)).reduce((s, r) => s + (r.guestCount ?? 1), 0) ?? 0
+    : reminderModal?.rsvps
+        .filter(r => reminderAudience === 'yes' ? r.response === 'yes' : r.response === 'yes' || r.response === 'maybe')
+        .reduce((s, r) => s + (r.guestCount ?? 1), 0) ?? 0;
 
   if (authLoading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--ec-bg)' }}>
@@ -93,6 +192,13 @@ export default function DashboardPage() {
     <div style={{ minHeight: '100vh', background: 'var(--ec-bg)' }}>
       <EcNav email={user?.email} isAdmin={isAdmin} onLogout={logout} />
       <main className="ec-page">
+
+        {/* Reminder toast */}
+        {reminderToast && (
+          <div style={{ background: 'var(--ec-success-bg)', color: 'var(--ec-success)', padding: '12px 16px', borderRadius: 8, marginBottom: 16, fontSize: 13, border: '1px solid var(--ec-success-border)' }}>
+            {reminderToast}
+          </div>
+        )}
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
@@ -143,7 +249,6 @@ export default function DashboardPage() {
 
               return (
                 <div key={ev.eventId} style={{ background: 'var(--ec-surface)', border: '1px solid var(--ec-border)', borderRadius: 'var(--ec-radius-lg)', overflow: 'hidden' }}>
-                  {/* Event row */}
                   <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px', gap: 12 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -163,6 +268,9 @@ export default function DashboardPage() {
                       <EcButton size="sm" variant="ghost" loading={rsvpLoading === ev.eventId} onClick={() => loadRsvps(ev.eventId)}>
                         RSVP {rsvps.length > 0 ? `(${rsvps.length})` : ''}
                       </EcButton>
+                      <EcButton size="sm" variant="ghost" loading={loadingReminderRsvps} onClick={() => openReminderModal(ev.eventId, ev.title)}>
+                        Remind
+                      </EcButton>
                       <button
                         onClick={() => { if (confirm('Delete this event?')) deleteEvent.mutate(ev.eventId); }}
                         style={{ background: 'none', border: 'none', color: 'var(--ec-text-3)', cursor: 'pointer', fontSize: 18, padding: '0 4px' }}
@@ -170,11 +278,8 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  {/* RSVP panel */}
                   {isExpanded && (
                     <div style={{ borderTop: '1px solid var(--ec-border)', padding: 16, background: 'var(--ec-bg)' }}>
-
-                      {/* Summary row */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
                         <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--ec-text-2)' }}>Guest Responses</p>
                         <span style={{ fontSize: 11, color: 'var(--ec-success)' }}>✓ {counts.yes} yes</span>
@@ -192,8 +297,6 @@ export default function DashboardPage() {
                           )}
                         </div>
                       </div>
-
-                      {/* RSVP list */}
                       {rsvps.length === 0 ? (
                         <p style={{ fontSize: 13, color: 'var(--ec-text-3)' }}>No RSVPs yet</p>
                       ) : (
@@ -235,6 +338,101 @@ export default function DashboardPage() {
             })}
           </div>
         )}
+
+        {/* ── Reminder Modal ── */}
+        {reminderModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+            <div style={{ background: 'var(--ec-surface)', border: '1px solid var(--ec-border)', borderRadius: 'var(--ec-radius-lg)', width: '100%', maxWidth: 560, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+
+              {/* Modal header */}
+              <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid var(--ec-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--ec-text-1)', margin: 0 }}>Send Reminder</p>
+                  <p style={{ fontSize: 12, color: 'var(--ec-text-3)', margin: 0 }}>{reminderModal.title}</p>
+                </div>
+                <button onClick={closeReminderModal} style={{ background: 'none', border: 'none', color: 'var(--ec-text-3)', cursor: 'pointer', fontSize: 20, padding: '0 4px' }}>×</button>
+              </div>
+
+              {/* Audience options */}
+              <div style={{ padding: '16px 20px 0' }}>
+                <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--ec-text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Who receives this reminder</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+                  {([
+                    { key: 'yes',      label: 'Yes RSVPs only',      count: audienceCounts.yes },
+                    { key: 'yes_maybe', label: 'Yes + Maybe RSVPs',   count: audienceCounts.yes_maybe },
+                    { key: 'specific', label: 'Select specific guests', count: audienceCounts.specific },
+                  ] as { key: ReminderAudience; label: string; count: number }[]).map(opt => (
+                    <div
+                      key={opt.key}
+                      onClick={() => {
+                        setReminderAudience(opt.key);
+                        if (opt.key === 'yes')      selectQuick('yes');
+                        if (opt.key === 'yes_maybe') selectQuick('yes_maybe');
+                      }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: `1px solid ${reminderAudience === opt.key ? 'var(--ec-brand)' : 'var(--ec-border)'}`, borderRadius: 'var(--ec-radius-sm)', background: reminderAudience === opt.key ? 'var(--ec-brand-subtle)' : 'transparent', cursor: 'pointer' }}
+                    >
+                      <div style={{ width: 14, height: 14, borderRadius: '50%', border: `2px solid ${reminderAudience === opt.key ? 'var(--ec-brand)' : 'var(--ec-border)'}`, background: reminderAudience === opt.key ? 'var(--ec-brand)' : 'transparent', flexShrink: 0 }} />
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--ec-text-1)', margin: 0 }}>{opt.label}</p>
+                      </div>
+                      <span style={{ fontSize: 11, color: 'var(--ec-text-3)' }}>{opt.count} guests</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Guest selector (specific only) */}
+              {reminderAudience === 'specific' && (
+                <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: '0 20px' }}>
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                    <button onClick={() => selectQuick('all')}       style={{ fontSize: 11, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--ec-border)', background: 'none', cursor: 'pointer', color: 'var(--ec-text-2)', fontFamily: 'inherit' }}>All</button>
+                    <button onClick={() => selectQuick('yes')}       style={{ fontSize: 11, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--ec-border)', background: 'none', cursor: 'pointer', color: 'var(--ec-text-2)', fontFamily: 'inherit' }}>Yes only</button>
+                    <button onClick={() => selectQuick('yes_maybe')} style={{ fontSize: 11, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--ec-border)', background: 'none', cursor: 'pointer', color: 'var(--ec-text-2)', fontFamily: 'inherit' }}>Yes+Maybe</button>
+                    <button onClick={() => selectQuick('none')}      style={{ fontSize: 11, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--ec-border)', background: 'none', cursor: 'pointer', color: 'var(--ec-text-2)', fontFamily: 'inherit' }}>Clear</button>
+                    <input
+                      type="text" placeholder="Search..." value={guestSearch}
+                      onChange={e => setGuestSearch(e.target.value)}
+                      style={{ flex: 1, minWidth: 120, fontSize: 12, padding: '4px 10px', borderRadius: 6, border: '1px solid var(--ec-border)', background: 'var(--ec-card)', color: 'var(--ec-text-1)', fontFamily: 'inherit' }}
+                    />
+                  </div>
+                  <div style={{ flex: 1, overflowY: 'auto', maxHeight: 260 }}>
+                    {filteredRsvps.map(r => (
+                      <div key={r.rsvpId} onClick={() => toggleRsvpSelection(r.rsvpId)}
+                        style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--ec-border)', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={selectedRsvpIds.has(r.rsvpId)} onChange={() => toggleRsvpSelection(r.rsvpId)}
+                          onClick={e => e.stopPropagation()}
+                          style={{ width: 14, height: 14, marginTop: 2, flexShrink: 0, cursor: 'pointer' }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 13, color: 'var(--ec-text-1)' }}>{r.name}</span>
+                            <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 6, background: r.response === 'yes' ? 'var(--ec-success-bg)' : r.response === 'no' ? 'var(--ec-danger-bg)' : 'var(--ec-warning-bg)', color: r.response === 'yes' ? 'var(--ec-success)' : r.response === 'no' ? 'var(--ec-danger)' : 'var(--ec-warning)' }}>{r.response}</span>
+                            <span style={{ fontSize: 10, color: 'var(--ec-text-3)' }}>{r.guestCount ?? 1} guest{(r.guestCount ?? 1) !== 1 ? 's' : ''}</span>
+                          </div>
+                          {r.message && <p style={{ fontSize: 11, color: 'var(--ec-text-3)', margin: '2px 0 0', fontStyle: 'italic', lineHeight: 1.4 }}>{r.message}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Modal footer */}
+              <div style={{ padding: '14px 20px', borderTop: '1px solid var(--ec-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--ec-text-1)' }}>
+                    {reminderAudience === 'specific' ? selectedRsvpIds.size : audienceCounts[reminderAudience]} guests
+                  </span>
+                  <span style={{ fontSize: 12, color: 'var(--ec-text-3)' }}> · ~{expectedAttendees} expected attendees</span>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <EcButton size="sm" variant="ghost" onClick={closeReminderModal}>Cancel</EcButton>
+                  <EcButton size="sm" loading={reminderSending} onClick={sendReminder}>Send Reminder</EcButton>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
       </main>
     </div>
   );

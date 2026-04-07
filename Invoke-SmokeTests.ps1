@@ -145,7 +145,7 @@ function Run-FrontendGate {
     Show-Gate "3 -- FRONTEND (Vercel)"
 
     Test-Http -Label "Homepage loads" -Uri "$FrontEnd"
-    Test-Http -Label "Login page reachable" -Uri "$FrontEnd/login"
+    Test-Http -Label "Login page reachable" -Uri "$FrontEnd/auth/login"
     Test-Http -Label "Microsite /e/$Slug loads" -Uri "$FrontEnd/e/$Slug"
 
     Write-Host ""

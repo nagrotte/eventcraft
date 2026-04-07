@@ -46,6 +46,7 @@ public class UpdateEventCommandHandler : IRequestHandler<UpdateEventCommand, Eve
         if (req.OrganizerEmail is not null) entity.OrganizerEmail = req.OrganizerEmail.Trim();
         if (req.Schedule       is not null) entity.Schedule       = req.Schedule;
         if (req.GalleryUrl     is not null) entity.GalleryUrl     = req.GalleryUrl.Trim();
+        if (req.ReminderSchedule is not null) entity.ReminderSchedule = System.Text.Json.JsonSerializer.Serialize(req.ReminderSchedule);
 
         _log.LogInformation("Event updated: {EventId} by {UserId}", cmd.EventId, cmd.UserId);
         return await _repo.UpdateAsync(entity, ct);

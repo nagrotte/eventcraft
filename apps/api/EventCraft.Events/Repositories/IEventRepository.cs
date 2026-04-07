@@ -1,7 +1,5 @@
 using EventCraft.Events.Models;
-
 namespace EventCraft.Events.Repositories;
-
 public interface IEventRepository
 {
     Task<EventEntity?>                   GetByIdAsync(string eventId, CancellationToken ct = default);
@@ -12,13 +10,14 @@ public interface IEventRepository
     Task                                 DeleteAsync(string eventId, CancellationToken ct = default);
     Task                                 SaveRsvpAsync(string eventId, RsvpRequest rsvp, CancellationToken ct = default);
     Task<List<RsvpEntity>>               ListRsvpsAsync(string eventId, CancellationToken ct = default);
+    Task<List<RsvpEntity>>               ListRsvpsByResponseAsync(string eventId, IEnumerable<string> responses, CancellationToken ct = default);
     Task                                 DeleteRsvpAsync(string eventId, string rsvpId, CancellationToken ct = default);
     Task<List<ContactEntity>>            ListContactsAsync(string userId, CancellationToken ct = default);
     Task<ContactEntity>                  CreateContactAsync(string userId, CreateContactRequest req, CancellationToken ct = default);
     Task                                 DeleteContactAsync(string userId, string contactId, CancellationToken ct = default);
-
-    // Curated image library
     Task<List<CuratedImageEntity>>       ListCuratedAsync(CancellationToken ct = default);
     Task<CuratedImageEntity>             CreateCuratedAsync(CuratedImageEntity entity, CancellationToken ct = default);
     Task                                 DeleteCuratedAsync(string imageId, CancellationToken ct = default);
+    Task<ReminderLog>                    SaveReminderLogAsync(ReminderLog log, CancellationToken ct = default);
+    Task<List<ReminderLog>>              ListReminderLogsAsync(string eventId, CancellationToken ct = default);
 }

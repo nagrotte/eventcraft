@@ -10,6 +10,7 @@ public class CreateEventRequest
     public int?    Capacity    { get; set; }
     public List<string>? Tags  { get; set; }
     public string? RsvpDeadline { get; set; }
+    public List<ReminderScheduleItem>? ReminderSchedule { get; set; }
 }
 public class UpdateEventRequest
 {
@@ -30,6 +31,7 @@ public class UpdateEventRequest
     public string? OrganizerEmail  { get; set; }
     public string? Schedule        { get; set; }
     public string? GalleryUrl      { get; set; }
+    public List<ReminderScheduleItem>? ReminderSchedule { get; set; }
 }
 public class PublishEventRequest
 {
@@ -48,7 +50,7 @@ public class RsvpRequest
 {
     public string  Name       { get; set; } = default!;
     public string  Email      { get; set; } = default!;
-    public string  Response   { get; set; } = "yes"; // yes | no | maybe
+    public string  Response   { get; set; } = "yes";
     public string? Message    { get; set; }
     public int     GuestCount { get; set; } = 1;
 }
@@ -62,4 +64,9 @@ public class RsvpEntity
     public string? Message    { get; set; }
     public string  CreatedAt  { get; set; } = default!;
     public int     GuestCount { get; set; } = 1;
+}
+public class SendReminderRequest
+{
+    public List<string>? RsvpIds  { get; set; }
+    public string?       Audience { get; set; } // yes | yes_maybe | all
 }

@@ -23,6 +23,7 @@ export interface EventEntity {
   organizerPhone?:  string;
   organizerEmail?:  string;
   galleryUrl?:      string;
+  reminderSchedule?: string;
 }
 
 export interface CreateEventInput {
