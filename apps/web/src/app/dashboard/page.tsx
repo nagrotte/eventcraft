@@ -68,6 +68,8 @@ export default function DashboardPage() {
   const [msgBody,         setMsgBody]         = useState('');
   const [msgAudience,     setMsgAudience]     = useState<ReminderAudience>('yes');
   const [msgSending,      setMsgSending]      = useState(false);
+  const [msgSelectedIds,  setMsgSelectedIds]  = useState<Set<string>>(new Set());
+  const [msgSearch,       setMsgSearch]       = useState('');
   const [loadingMsgRsvps, setLoadingMsgRsvps] = useState(false);
 
   useEffect(() => {
@@ -427,13 +429,52 @@ export default function DashboardPage() {
               </div>
               <div style={{ padding: '16px 20px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div>
-                  <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--ec-text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Audience</p>
-                  <select value={msgAudience} onChange={e => setMsgAudience(e.target.value as ReminderAudience)}
-                    style={{ width: '100%', fontSize: 13, padding: '8px 10px', borderRadius: 'var(--ec-radius-sm)', border: '1px solid var(--ec-border)', background: 'var(--ec-card)', color: 'var(--ec-text-1)', fontFamily: 'inherit' }}>
-                    <option value="yes">Yes RSVPs only ({messageModal.rsvps.filter(r => r.response === 'yes').length} guests)</option>
-                    <option value="yes_maybe">Yes + Maybe RSVPs ({messageModal.rsvps.filter(r => r.response === 'yes' || r.response === 'maybe').length} guests)</option>
-                    <option value="all">All RSVPs ({messageModal.rsvps.length} guests)</option>
-                  </select>
+                  <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--ec-text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Audience</p>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                    {([
+                      { key: 'yes',      label: 'Yes only',    count: messageModal.rsvps.filter(r => r.response === 'yes').length },
+                      { key: 'yes_maybe', label: 'Yes + Maybe', count: messageModal.rsvps.filter(r => r.response === 'yes' || r.response === 'maybe').length },
+                      { key: 'all',      label: 'All RSVPs',   count: messageModal.rsvps.length },
+                      { key: 'specific', label: 'Select guests', count: msgSelectedIds.size },
+                    ] as { key: string; label: string; count: number }[]).map(opt => (
+                      <button key={opt.key}
+                        onClick={() => {
+                          setMsgAudience(opt.key as ReminderAudience);
+                          if (opt.key === 'yes')       { const ids = new Set(messageModal.rsvps.filter(r => r.response === 'yes').map(r => r.rsvpId)); setMsgSelectedIds(ids); }
+                          if (opt.key === 'yes_maybe') { const ids = new Set(messageModal.rsvps.filter(r => r.response === 'yes' || r.response === 'maybe').map(r => r.rsvpId)); setMsgSelectedIds(ids); }
+                          if (opt.key === 'all')       { const ids = new Set(messageModal.rsvps.map(r => r.rsvpId)); setMsgSelectedIds(ids); }
+                        }}
+                        style={{ fontSize: 12, padding: '5px 12px', borderRadius: 'var(--ec-radius-sm)', border: `1px solid ${msgAudience === opt.key ? 'var(--ec-brand)' : 'var(--ec-border)'}`, background: msgAudience === opt.key ? 'var(--ec-brand-subtle)' : 'transparent', color: msgAudience === opt.key ? 'var(--ec-brand)' : 'var(--ec-text-2)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: msgAudience === opt.key ? 600 : 400 }}>
+                        {opt.label} ({opt.count})
+                      </button>
+                    ))}
+                  </div>
+                  {msgAudience === 'specific' && (
+                    <div style={{ background: 'var(--ec-card)', border: '1px solid var(--ec-border)', borderRadius: 'var(--ec-radius-sm)', padding: '8px 10px', maxHeight: 200, overflowY: 'auto' }}>
+                      <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                        <button onClick={() => setMsgSelectedIds(new Set(messageModal.rsvps.map(r => r.rsvpId)))} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, border: '1px solid var(--ec-border)', background: 'none', cursor: 'pointer', color: 'var(--ec-text-2)', fontFamily: 'inherit' }}>All</button>
+                        <button onClick={() => setMsgSelectedIds(new Set(messageModal.rsvps.filter(r => r.response === 'yes').map(r => r.rsvpId)))} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, border: '1px solid var(--ec-border)', background: 'none', cursor: 'pointer', color: 'var(--ec-text-2)', fontFamily: 'inherit' }}>Yes</button>
+                        <button onClick={() => setMsgSelectedIds(new Set(messageModal.rsvps.filter(r => r.response === 'yes' || r.response === 'maybe').map(r => r.rsvpId)))} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, border: '1px solid var(--ec-border)', background: 'none', cursor: 'pointer', color: 'var(--ec-text-2)', fontFamily: 'inherit' }}>Yes+Maybe</button>
+                        <button onClick={() => setMsgSelectedIds(new Set())} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, border: '1px solid var(--ec-border)', background: 'none', cursor: 'pointer', color: 'var(--ec-text-2)', fontFamily: 'inherit' }}>Clear</button>
+                        <input type="text" placeholder="Search..." value={msgSearch} onChange={e => setMsgSearch(e.target.value)}
+                          style={{ flex: 1, minWidth: 100, fontSize: 11, padding: '3px 8px', borderRadius: 6, border: '1px solid var(--ec-border)', background: 'var(--ec-surface)', color: 'var(--ec-text-1)', fontFamily: 'inherit' }} />
+                      </div>
+                      {messageModal.rsvps
+                        .filter(r => !msgSearch || r.name.toLowerCase().includes(msgSearch.toLowerCase()) || r.email.toLowerCase().includes(msgSearch.toLowerCase()))
+                        .map(r => (
+                        <div key={r.rsvpId} onClick={() => { const s = new Set(msgSelectedIds); s.has(r.rsvpId) ? s.delete(r.rsvpId) : s.add(r.rsvpId); setMsgSelectedIds(s); setMsgAudience('specific'); }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: '1px solid var(--ec-border)', cursor: 'pointer' }}>
+                          <input type="checkbox" checked={msgSelectedIds.has(r.rsvpId)} onChange={() => {}} onClick={e => e.stopPropagation()} style={{ width: 13, height: 13, flexShrink: 0 }} />
+                          <span style={{ fontSize: 12, color: 'var(--ec-text-1)', flex: 1 }}>{r.name}</span>
+                          <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: r.response === 'yes' ? 'var(--ec-success-bg)' : r.response === 'no' ? 'var(--ec-danger-bg)' : 'var(--ec-warning-bg)', color: r.response === 'yes' ? 'var(--ec-success)' : r.response === 'no' ? 'var(--ec-danger)' : 'var(--ec-warning)' }}>{r.response}</span>
+                          <span style={{ fontSize: 10, color: 'var(--ec-text-3)' }}>{r.guestCount ?? 1}g</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p style={{ fontSize: 11, color: 'var(--ec-text-3)', marginTop: 6 }}>
+                    {msgAudience === 'specific' ? `${msgSelectedIds.size} selected` : `${msgAudience === 'yes' ? messageModal.rsvps.filter(r => r.response === 'yes').length : msgAudience === 'yes_maybe' ? messageModal.rsvps.filter(r => r.response === 'yes' || r.response === 'maybe').length : messageModal.rsvps.length} recipients`}
+                  </p>
                 </div>
                 <EcInput label="Subject" value={msgSubject} onChange={e => setMsgSubject(e.target.value)} placeholder="A message from your host" />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

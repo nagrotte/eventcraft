@@ -647,8 +647,9 @@ public class EventsHandler
         foreach (var rsvp in rsvps)
         {
             if (string.IsNullOrEmpty(rsvp.Email)) continue;
+            var personalizedBody = body.Body.Replace("{name}", rsvp.Name);
             var html = BuildMessageHtml(
-                rsvp.Name, ev.Title, body.Subject, body.Body,
+                rsvp.Name, ev.Title, body.Subject, personalizedBody,
                 ev.OrganizerName ?? "",
                 body.TriggerType == "followup" ? ev.GalleryUrl : null,
                 rsvpUrl);
