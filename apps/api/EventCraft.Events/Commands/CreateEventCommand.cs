@@ -34,6 +34,7 @@ public class CreateEventCommandHandler : IRequestHandler<CreateEventCommand, Eve
       Capacity = cmd.Request.Capacity,
       Status = "draft",
       Tags = cmd.Request.Tags ?? new(),
+      Schedule = cmd.Request.Schedule,
       RsvpDeadline = cmd.Request.RsvpDeadline,
       CreatedAt = now,
       UpdatedAt = now

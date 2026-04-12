@@ -100,7 +100,13 @@ public class EventsHandler
             if (method == "GET"  && path.StartsWith("/events/") && path.EndsWith("/public"))       return await GetPublicEvent(request);
             if (method == "POST" && path.StartsWith("/events/") && path.EndsWith("/invite/email")) return await SendEmailInvites(request);
             if (method == "POST" && path.StartsWith("/events/") && path.EndsWith("/reminders/send")) return await SendReminders(request);
+            if (method == "POST" && path.StartsWith("/events/") && path.EndsWith("/duplicate"))     return await DuplicateEvent(request);
+            if (method == "POST" && path.StartsWith("/events/") && path.EndsWith("/messages/send")) return await SendMessage(request);
+            if (method == "POST" && path.Contains("/rsvp/") && path.EndsWith("/checkin"))       return await CheckinRsvp(request);
             if (method == "GET"  && path.StartsWith("/events/") && path.EndsWith("/reminders"))      return await GetReminderLogs(request);
+            if (method == "POST" && path.StartsWith("/events/") && path.EndsWith("/duplicate"))        return await DuplicateEvent(request);
+            if (method == "POST" && path.StartsWith("/events/") && path.EndsWith("/messages/send"))    return await SendMessage(request);
+            if (method == "POST" && path.Contains("/rsvp/") && path.EndsWith("/checkin"))              return await CheckinRsvp(request);
 
             if (method == "GET"    && path.StartsWith("/events/")) return await GetEvent(request);
             if (method == "PUT"    && path.StartsWith("/events/") && path.EndsWith("/publish"))    return await PublishEvent(request);
@@ -556,6 +562,174 @@ public class EventsHandler
         return OkResponse(ApiResponse<object>.Ok(logs));
     }
 
+
+    private async Task<APIGatewayProxyResponse> CheckinRsvp(APIGatewayProxyRequest req)
+    {
+        var userId = GetUserId(req);
+        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+
+        // Path: /events/{eventId}/rsvp/{rsvpId}/checkin
+        var parts   = req.Path.Trim('/').Split('/');
+        var eventId = parts.Length > 1 ? parts[1] : "";
+        var rsvpId  = parts.Length > 3 ? parts[3] : "";
+        if (string.IsNullOrEmpty(eventId) || string.IsNullOrEmpty(rsvpId))
+            return ErrorResponse(400, "BAD_REQUEST", "Invalid path");
+
+        var repo = _services.GetRequiredService<IEventRepository>();
+        var ev   = await repo.GetByIdAsync(eventId);
+        if (ev is null || ev.UserId != userId) return NotFoundResponse();
+
+        var rsvp = await repo.CheckinRsvpAsync(eventId, rsvpId);
+        if (rsvp is null) return NotFoundResponse();
+
+        return OkResponse(ApiResponse<object>.Ok(new {
+            rsvpId     = rsvp.RsvpId,
+            name       = rsvp.Name,
+            guestCount = rsvp.GuestCount,
+            checkedIn  = rsvp.CheckedIn,
+            checkedInAt = rsvp.CheckedInAt
+        }));
+    }
+
+    private async Task<APIGatewayProxyResponse> DuplicateEvent(APIGatewayProxyRequest req)
+    {
+        var userId  = GetUserId(req);
+        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+        var eventId = GetSegment(req.Path, 1);
+        var repo    = _services.GetRequiredService<IEventRepository>();
+        var source  = await repo.GetByIdAsync(eventId);
+        if (source is null || source.UserId != userId) return NotFoundResponse();
+        var newEvent = await repo.DuplicateEventAsync(eventId, userId);
+        return OkResponse(ApiResponse<EventEntity>.Ok(newEvent), 201);
+    }
+
+    private async Task<APIGatewayProxyResponse> SendMessage(APIGatewayProxyRequest req)
+    {
+        var userId = GetUserId(req);
+        if (userId is null) return ErrorResponse(401, "UNAUTHORIZED", "Unauthorized");
+
+        var eventId = GetSegment(req.Path, 1);
+        var repo    = _services.GetRequiredService<IEventRepository>();
+        var ev      = await repo.GetByIdAsync(eventId);
+        if (ev is null || ev.UserId != userId) return NotFoundResponse();
+
+        var body = Deserialize<SendMessageRequest>(req.Body);
+        if (body is null || string.IsNullOrWhiteSpace(body.Subject) || string.IsNullOrWhiteSpace(body.Body))
+            return ErrorResponse(400, "BAD_REQUEST", "Subject and body are required");
+
+        List<RsvpEntity> rsvps;
+        if (body.RsvpIds != null && body.RsvpIds.Count > 0)
+        {
+            var all = await repo.ListRsvpsAsync(eventId);
+            var ids = new HashSet<string>(body.RsvpIds);
+            rsvps = all.Where(r => ids.Contains(r.RsvpId)).ToList();
+        }
+        else
+        {
+            var responses = body.Audience switch
+            {
+                "yes_maybe" => new[] { "yes", "maybe" },
+                "all"       => new[] { "yes", "maybe", "no" },
+                _           => new[] { "yes" }
+            };
+            rsvps = await repo.ListRsvpsByResponseAsync(eventId, responses);
+        }
+
+        var appUrl  = Environment.GetEnvironmentVariable("APP_URL") ?? "https://eventcraft.irotte.com";
+        var rsvpUrl = !string.IsNullOrEmpty(ev.MicrositeSlug)
+            ? $"{appUrl}/e/{ev.MicrositeSlug}"
+            : $"{appUrl}/rsvp/{eventId}";
+
+        var ses    = new AmazonSimpleEmailServiceClient(Amazon.RegionEndpoint.USEast1);
+        var sent   = new List<string>();
+        var failed = new List<string>();
+
+        foreach (var rsvp in rsvps)
+        {
+            if (string.IsNullOrEmpty(rsvp.Email)) continue;
+            var html = BuildMessageHtml(
+                rsvp.Name, ev.Title, body.Subject, body.Body,
+                ev.OrganizerName ?? "",
+                body.TriggerType == "followup" ? ev.GalleryUrl : null,
+                rsvpUrl);
+            try
+            {
+                var fromName = !string.IsNullOrEmpty(ev.OrganizerName) ? ev.OrganizerName : "EventCraft";
+                await ses.SendEmailAsync(new SendEmailRequest
+                {
+                    Source      = $"{fromName} <noreply@pragmaticconsulting.net>",
+                    Destination = new Destination { ToAddresses = new List<string> { rsvp.Email } },
+                    Message     = new Message
+                    {
+                        Subject = new Content(body.Subject),
+                        Body    = new Body { Html = new Content(html) }
+                    }
+                });
+                sent.Add(rsvp.Email);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Message failed for {rsvp.Email}: {ex.Message}");
+                failed.Add(rsvp.Email);
+            }
+        }
+
+        await repo.SaveReminderLogAsync(new ReminderLog
+        {
+            EventId     = eventId,
+            TriggerType = body.TriggerType,
+            Audience    = body.Audience,
+            SentCount   = sent.Count,
+            FailedCount = failed.Count,
+        });
+
+        return OkResponse(ApiResponse<object>.Ok(new { sent, failed, total = rsvps.Count }));
+    }
+
+    private static string BuildMessageHtml(
+        string guestName,
+        string eventTitle,
+        string subject,
+        string messageBody,
+        string organizer,
+        string? galleryUrl,
+        string eventUrl)
+    {
+        var hostLine = string.IsNullOrEmpty(organizer) ? "" :
+            $"<p style='font-size:13px;color:#9ca3af;margin:0 0 20px 0;font-family:Helvetica,Arial,sans-serif'>From <span style='color:#e5e7eb;font-weight:500'>{organizer}</span></p>";
+
+        var galleryBlock = string.IsNullOrEmpty(galleryUrl) ? "" : $@"
+    <div style='margin:20px 0;padding:16px;background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.3);border-radius:8px;text-align:center'>
+      <p style='font-size:13px;color:#D4AF37;margin:0 0 10px 0;font-family:Helvetica,Arial,sans-serif;font-weight:600'>Event Photos</p>
+      <a href='{galleryUrl}' style='display:inline-block;background:#4F46E5;color:#ffffff;text-decoration:none;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600;font-family:Helvetica,Arial,sans-serif'>View Gallery</a>
+    </div>";
+
+        var bodyFormatted = messageBody.Replace("\n", "<br>");
+
+        return $@"<!DOCTYPE html>
+<html lang='en'>
+<head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>{subject}</title></head>
+<body style='margin:0;padding:0;background:#111827;font-family:Georgia,serif;color:#f9fafb'>
+  <div style='max-width:520px;margin:0 auto;padding:40px 28px 32px'>
+    <div style='text-align:center;margin-bottom:28px'>
+      <a href='https://eventcraft.irotte.com' style='text-decoration:none'>
+        <span style='font-size:15px;font-weight:600;color:#ffffff;font-family:Georgia,serif'>event</span><span style='font-size:15px;font-weight:600;color:#D4AF37;font-family:Georgia,serif'>craft</span>
+      </a>
+    </div>
+    <p style='font-size:14px;color:#9ca3af;margin:0 0 6px 0;font-family:Helvetica,Arial,sans-serif'>Dear {guestName},</p>
+    <h1 style='font-size:24px;font-weight:700;color:#ffffff;margin:0 0 8px 0;font-family:Georgia,serif'>{eventTitle}</h1>
+    {hostLine}
+    <div style='height:1px;background:rgba(212,175,55,0.4);margin-bottom:20px'></div>
+    <div style='font-size:14px;color:#d1d5db;line-height:1.7;font-family:Helvetica,Arial,sans-serif;margin-bottom:20px'>{bodyFormatted}</div>
+    {galleryBlock}
+    <p style='font-size:12px;color:#374151;margin:0 0 32px 0;font-family:Helvetica,Arial,sans-serif'><a href='{eventUrl}' style='color:#6366F1'>{eventUrl}</a></p>
+    <div style='border-top:1px solid rgba(255,255,255,0.05);padding-top:14px'>
+      <p style='font-size:11px;color:rgba(255,255,255,0.15);margin:0;font-family:Helvetica,Arial,sans-serif'>Sent via <span style='color:rgba(255,255,255,0.25)'>eventcraft</span></p>
+    </div>
+  </div>
+</body>
+</html>";
+    }
 
     private static string FormatSchedule(string? scheduleJson)
     {

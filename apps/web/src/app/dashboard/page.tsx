@@ -23,6 +23,13 @@ interface RsvpEntry {
 
 type ReminderAudience = 'yes' | 'yes_maybe' | 'specific';
 
+interface MessageModal {
+  eventId:    string;
+  title:      string;
+  rsvps:      RsvpEntry[];
+  isFollowup: boolean;
+}
+
 interface ReminderModal {
   eventId:  string;
   title:    string;
@@ -47,6 +54,7 @@ export default function DashboardPage() {
   const [rsvpLoading,  setRsvpLoading]  = useState<string | null>(null);
   const [deletingRsvp, setDeletingRsvp] = useState<string | null>(null);
   const [reminderToast, setReminderToast] = useState<string | null>(null);
+  const [duplicating,   setDuplicating]   = useState<string | null>(null);
 
   // Reminder modal state
   const [reminderModal,    setReminderModal]    = useState<ReminderModal | null>(null);
@@ -55,6 +63,12 @@ export default function DashboardPage() {
   const [guestSearch,      setGuestSearch]      = useState('');
   const [reminderSending,  setReminderSending]  = useState(false);
   const [loadingReminderRsvps, setLoadingReminderRsvps] = useState(false);
+  const [messageModal,    setMessageModal]    = useState<MessageModal | null>(null);
+  const [msgSubject,      setMsgSubject]      = useState('');
+  const [msgBody,         setMsgBody]         = useState('');
+  const [msgAudience,     setMsgAudience]     = useState<ReminderAudience>('yes');
+  const [msgSending,      setMsgSending]      = useState(false);
+  const [loadingMsgRsvps, setLoadingMsgRsvps] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/auth/login');
@@ -93,6 +107,57 @@ export default function DashboardPage() {
       }));
     } catch { alert('Failed to delete RSVP'); }
     finally { setDeletingRsvp(null); }
+  }
+
+  async function duplicateEvent(eventId: string) {
+    if (!confirm('Duplicate this event as a new draft?')) return;
+    setDuplicating(eventId);
+    try {
+      const res = await apiClient.post(`/events/${eventId}/duplicate`, {});
+      const newEvent = res.data?.data;
+      setReminderToast(`Event duplicated! Redirecting to settings...`);
+      setTimeout(() => {
+        setReminderToast(null);
+        if (newEvent?.eventId) router.push(`/events/${newEvent.eventId}/settings`);
+      }, 1500);
+    } catch { alert('Failed to duplicate event'); }
+    finally { setDuplicating(null); }
+  }
+
+  async function openMessageModal(eventId: string, eventTitle: string, isFollowup: boolean) {
+    setLoadingMsgRsvps(true);
+    setMsgAudience('yes');
+    setMsgSubject(isFollowup ? `Thank you for joining ${eventTitle}!` : '');
+    setMsgBody(isFollowup ? `Dear {name},\n\nThank you so much for joining us at ${eventTitle}. It was a pleasure having you with us!\n\nWe hope to see you again soon.` : '');
+    try {
+      let rsvps = rsvpData[eventId];
+      if (!rsvps) {
+        const res = await apiClient.get(`/events/${eventId}/rsvp`);
+        rsvps = res.data.data ?? [];
+        setRsvpData(prev => ({ ...prev, [eventId]: rsvps! }));
+      }
+      setMessageModal({ eventId, title: eventTitle, rsvps, isFollowup });
+    } catch { alert('Failed to load RSVPs'); }
+    finally { setLoadingMsgRsvps(false); }
+  }
+
+  async function sendMessage() {
+    if (!messageModal) return;
+    if (!msgSubject.trim() || !msgBody.trim()) { alert('Subject and message are required'); return; }
+    setMsgSending(true);
+    try {
+      const res = await apiClient.post(`/events/${messageModal.eventId}/messages/send`, {
+        subject:     msgSubject,
+        body:        msgBody,
+        audience:    msgAudience,
+        triggerType: messageModal.isFollowup ? 'followup' : 'manual',
+      });
+      const { sent, failed } = res.data?.data ?? {};
+      setMessageModal(null);
+      setReminderToast(`Message sent to ${sent?.length ?? 0} guests${failed?.length ? `, ${failed.length} failed` : ''}`);
+      setTimeout(() => setReminderToast(null), 5000);
+    } catch { alert('Failed to send message'); }
+    finally { setMsgSending(false); }
   }
 
   async function openReminderModal(eventId: string, eventTitle: string) {
@@ -206,7 +271,13 @@ export default function DashboardPage() {
             <h1 style={{ fontSize: 22, fontWeight: 600, color: 'var(--ec-text-1)', letterSpacing: '-0.02em', marginBottom: 4 }}>Events</h1>
             <p style={{ fontSize: 13, color: 'var(--ec-text-3)' }}>{events.length} event{events.length !== 1 ? 's' : ''}</p>
           </div>
-          <EcButton onClick={() => setShowCreate(!showCreate)}>+ New event</EcButton>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button onClick={() => router.push('/beta/ai-planner')}
+              style={{ fontSize: 11, padding: '5px 12px', borderRadius: 99, border: '1px solid rgba(99,102,241,0.4)', background: 'rgba(99,102,241,0.08)', color: '#818cf8', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, letterSpacing: '0.04em' }}>
+              ✨ AI Planner (Beta)
+            </button>
+            <EcButton onClick={() => setShowCreate(!showCreate)}>+ New event</EcButton>
+          </div>
         </div>
 
         {/* Create form */}
@@ -249,32 +320,36 @@ export default function DashboardPage() {
 
               return (
                 <div key={ev.eventId} style={{ background: 'var(--ec-surface)', border: '1px solid var(--ec-border)', borderRadius: 'var(--ec-radius-lg)', overflow: 'hidden' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px', gap: 12 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                        <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--ec-text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</p>
-                        <EcBadge status={ev.status === 'published' ? 'published' : 'draft'} />
+                  <div style={{ padding: '14px 16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
+                          <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--ec-text-1)', margin: 0 }}>{ev.title}</p>
+                          <EcBadge status={ev.status === 'published' ? 'published' : 'draft'} />
+                        </div>
+                        <p style={{ fontSize: 12, color: 'var(--ec-text-3)', margin: 0 }}>
+                          {new Date(ev.eventDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                          {ev.location ? ` · ${ev.location}` : ''}
+                          {micrositeUrl ? ` · ${appUrl}/e/${ev.micrositeSlug}` : ''}
+                        </p>
                       </div>
-                      <p style={{ fontSize: 12, color: 'var(--ec-text-3)' }}>
-                        {new Date(ev.eventDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-                        {ev.location ? ` · ${ev.location}` : ''}
-                        {micrositeUrl ? ` · ${appUrl}/e/${ev.micrositeSlug}` : ''}
-                      </p>
+                      <button
+                        onClick={() => { if (confirm('Delete this event?')) deleteEvent.mutate(ev.eventId); }}
+                        style={{ background: 'none', border: 'none', color: 'var(--ec-text-3)', cursor: 'pointer', fontSize: 18, padding: '0 4px', flexShrink: 0 }}
+                      >×</button>
                     </div>
-                    <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <EcButton size="sm" onClick={() => router.push(`/events/${ev.eventId}/design`)}>Design</EcButton>
                       <EcButton size="sm" variant="ghost" onClick={() => router.push(`/events/${ev.eventId}/invite`)}>Invite</EcButton>
                       <EcButton size="sm" variant="ghost" onClick={() => router.push(`/events/${ev.eventId}/settings`)}>Settings</EcButton>
+                      <EcButton size="sm" variant="ghost" loading={duplicating === ev.eventId} onClick={() => duplicateEvent(ev.eventId)}>Duplicate</EcButton>
+                      <EcButton size="sm" variant="ghost" onClick={() => router.push(`/events/${ev.eventId}/checkin`)}>Check-in</EcButton>
                       <EcButton size="sm" variant="ghost" loading={rsvpLoading === ev.eventId} onClick={() => loadRsvps(ev.eventId)}>
-                        RSVP {rsvps.length > 0 ? `(${rsvps.length})` : ''}
+                        RSVPs {rsvps.length > 0 ? `(${rsvps.length})` : ''}
                       </EcButton>
-                      <EcButton size="sm" variant="ghost" loading={loadingReminderRsvps} onClick={() => openReminderModal(ev.eventId, ev.title)}>
-                        Remind
-                      </EcButton>
-                      <button
-                        onClick={() => { if (confirm('Delete this event?')) deleteEvent.mutate(ev.eventId); }}
-                        style={{ background: 'none', border: 'none', color: 'var(--ec-text-3)', cursor: 'pointer', fontSize: 18, padding: '0 4px' }}
-                      >×</button>
+                      <EcButton size="sm" variant="ghost" loading={loadingReminderRsvps} onClick={() => openReminderModal(ev.eventId, ev.title)}>Remind</EcButton>
+                      <EcButton size="sm" variant="ghost" loading={loadingMsgRsvps} onClick={() => openMessageModal(ev.eventId, ev.title, false)}>Message</EcButton>
+                      <EcButton size="sm" variant="ghost" onClick={() => openMessageModal(ev.eventId, ev.title, true)}>Follow-up</EcButton>
                     </div>
                   </div>
 
@@ -336,6 +411,47 @@ export default function DashboardPage() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* ── Message Modal ── */}
+        {messageModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+            <div style={{ background: 'var(--ec-surface)', border: '1px solid var(--ec-border)', borderRadius: 'var(--ec-radius-lg)', width: '100%', maxWidth: 520, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid var(--ec-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--ec-text-1)', margin: 0 }}>{messageModal.isFollowup ? 'Send Follow-up' : 'Send Message'}</p>
+                  <p style={{ fontSize: 12, color: 'var(--ec-text-3)', margin: 0 }}>{messageModal.title}</p>
+                </div>
+                <button onClick={() => setMessageModal(null)} style={{ background: 'none', border: 'none', color: 'var(--ec-text-3)', cursor: 'pointer', fontSize: 20 }}>×</button>
+              </div>
+              <div style={{ padding: '16px 20px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div>
+                  <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--ec-text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Audience</p>
+                  <select value={msgAudience} onChange={e => setMsgAudience(e.target.value as ReminderAudience)}
+                    style={{ width: '100%', fontSize: 13, padding: '8px 10px', borderRadius: 'var(--ec-radius-sm)', border: '1px solid var(--ec-border)', background: 'var(--ec-card)', color: 'var(--ec-text-1)', fontFamily: 'inherit' }}>
+                    <option value="yes">Yes RSVPs only ({messageModal.rsvps.filter(r => r.response === 'yes').length} guests)</option>
+                    <option value="yes_maybe">Yes + Maybe RSVPs ({messageModal.rsvps.filter(r => r.response === 'yes' || r.response === 'maybe').length} guests)</option>
+                    <option value="all">All RSVPs ({messageModal.rsvps.length} guests)</option>
+                  </select>
+                </div>
+                <EcInput label="Subject" value={msgSubject} onChange={e => setMsgSubject(e.target.value)} placeholder="A message from your host" />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--ec-text-2)' }}>Message</label>
+                  <textarea value={msgBody} onChange={e => setMsgBody(e.target.value)} rows={6} placeholder="Write your message here..."
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--ec-radius-sm)', background: 'var(--ec-card)', border: '1px solid var(--ec-border)', color: 'var(--ec-text-1)', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+                {messageModal.isFollowup && (
+                  <p style={{ fontSize: 12, color: 'var(--ec-text-3)', lineHeight: 1.5 }}>
+                    Gallery link will be automatically included if configured in Event Settings.
+                  </p>
+                )}
+              </div>
+              <div style={{ padding: '14px 20px', borderTop: '1px solid var(--ec-border)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <EcButton size="sm" variant="ghost" onClick={() => setMessageModal(null)}>Cancel</EcButton>
+                <EcButton size="sm" loading={msgSending} onClick={sendMessage}>Send Message</EcButton>
+              </div>
+            </div>
           </div>
         )}
 

@@ -199,7 +199,9 @@ public class DynamoEventRepository : IEventRepository
             Email     = item["email"].S,
             Response  = item["response"].S,
             Message   = item.TryGetValue("message", out var m) ? m.S : null,
-            CreatedAt = item["createdAt"].S,
+            CreatedAt  = item["createdAt"].S,
+            CheckedIn  = item.TryGetValue("checkedIn",  out var ci) && ci.BOOL,
+            CheckedInAt = item.TryGetValue("checkedInAt", out var cia) ? cia.S : null,
         }).ToList();
     }
 
@@ -466,6 +468,74 @@ public class DynamoEventRepository : IEventRepository
             SentAt        = item.TryGetValue("sentAt",        out var sa)  ? sa.S  : "",
             DaysBefore    = item.TryGetValue("daysBefore",    out var db)  && int.TryParse(db.N, out var dv) ? dv : null,
         }).ToList();
+    }
+
+    public async Task<EventEntity> DuplicateEventAsync(string eventId, string newUserId, CancellationToken ct = default)
+    {
+        var source = await GetByIdAsync(eventId, ct);
+        if (source is null) throw new Exception($"Event {eventId} not found");
+        var now = DateTime.UtcNow.ToString("O");
+        var newEntity = new EventEntity
+        {
+            EventId          = $"evt_{Guid.NewGuid():N}",
+            UserId           = newUserId,
+            Title            = $"{source.Title} (Copy)",
+            Description      = source.Description,
+            EventDate        = now, // host must set new date
+            Location         = source.Location,
+            Address          = source.Address,
+            Capacity         = source.Capacity,
+            Status           = "draft",
+            Tags             = source.Tags ?? new(),
+            Schedule         = source.Schedule,
+            OrganizerName    = source.OrganizerName,
+            OrganizerPhone   = source.OrganizerPhone,
+            OrganizerEmail   = source.OrganizerEmail,
+            ReminderSchedule = source.ReminderSchedule,
+            CreatedAt        = now,
+            UpdatedAt        = now,
+        };
+        return await CreateAsync(newEntity, ct);
+    }
+
+    public async Task<RsvpEntity?> CheckinRsvpAsync(string eventId, string rsvpId, CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow.ToString("O");
+        var key = new Dictionary<string, AttributeValue>
+        {
+            ["PK"] = new() { S = $"EVENT#{eventId}" },
+            ["SK"] = new() { S = $"RSVP#{rsvpId}" }
+        };
+        var exprVals = new Dictionary<string, AttributeValue>
+        {
+            [":true"] = new() { BOOL = true },
+            [":now"]  = new() { S = now }
+        };
+        await _dynamo.UpdateItemAsync(new UpdateItemRequest
+        {
+            TableName                 = _table,
+            Key                       = key,
+            UpdateExpression          = "SET checkedIn = :true, checkedInAt = :now",
+            ExpressionAttributeValues = exprVals,
+            ConditionExpression       = "attribute_exists(PK)"
+        }, ct);
+        // Return updated entity
+        var getResp = await _dynamo.GetItemAsync(new GetItemRequest { TableName = _table, Key = key }, ct);
+        if (!getResp.IsItemSet) return null;
+        var item = getResp.Item;
+        return new RsvpEntity
+        {
+            RsvpId     = item["rsvpId"].S,
+            EventId    = eventId,
+            Name       = item["name"].S,
+            Email      = item["email"].S,
+            Response   = item["response"].S,
+            Message    = item.TryGetValue("message",    out var m)  ? m.S  : null,
+            CreatedAt  = item["createdAt"].S,
+            GuestCount = item.TryGetValue("guestCount", out var gc) ? int.Parse(gc.N ?? "1") : 1,
+            CheckedIn  = true,
+            CheckedInAt = now,
+        };
     }
 
 }

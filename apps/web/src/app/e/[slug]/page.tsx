@@ -26,6 +26,7 @@ export default function MicrositePage() {
   const [event, setEvent]       = useState<PublicEvent | null>(null);
   const [loading, setLoading]   = useState(true);
   const [step, setStep]         = useState<'view' | 'form' | 'done'>('view');
+  const [rsvpId, setRsvpId]   = useState<string | null>(null);
   const [name, setName]         = useState('');
   const [email, setEmail]       = useState('');
   const [response, setResponse] = useState<'yes' | 'no' | 'maybe'>('yes');
@@ -112,8 +113,10 @@ export default function MicrositePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, response, message, guestCount }),
       });
+      const resJson = await res.json().catch(() => null);
       if (!res.ok) throw new Error();
       setStep('done');
+      if (resJson?.data?.rsvpId) setRsvpId(resJson.data.rsvpId);
     } catch {
       setFormError('Failed to submit — please try again');
     } finally {

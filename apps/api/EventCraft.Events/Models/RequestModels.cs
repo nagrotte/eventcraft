@@ -11,6 +11,7 @@ public class CreateEventRequest
     public List<string>? Tags  { get; set; }
     public string? RsvpDeadline { get; set; }
     public List<ReminderScheduleItem>? ReminderSchedule { get; set; }
+    public string? Schedule { get; set; }
 }
 public class UpdateEventRequest
 {
@@ -53,6 +54,8 @@ public class RsvpRequest
     public string  Response   { get; set; } = "yes";
     public string? Message    { get; set; }
     public int     GuestCount { get; set; } = 1;
+    public bool    CheckedIn  { get; set; } = false;
+    public string? CheckedInAt { get; set; }
 }
 public class RsvpEntity
 {
@@ -64,9 +67,19 @@ public class RsvpEntity
     public string? Message    { get; set; }
     public string  CreatedAt  { get; set; } = default!;
     public int     GuestCount { get; set; } = 1;
+    public bool    CheckedIn  { get; set; } = false;
+    public string? CheckedInAt { get; set; }
 }
 public class SendReminderRequest
 {
     public List<string>? RsvpIds  { get; set; }
     public string?       Audience { get; set; } // yes | yes_maybe | all
+}
+public class SendMessageRequest
+{
+    public string        Subject     { get; set; } = default!;
+    public string        Body        { get; set; } = default!;
+    public string        Audience    { get; set; } = "yes"; // yes | yes_maybe | all | specific
+    public List<string>? RsvpIds     { get; set; }
+    public string        TriggerType { get; set; } = "manual"; // manual | followup
 }

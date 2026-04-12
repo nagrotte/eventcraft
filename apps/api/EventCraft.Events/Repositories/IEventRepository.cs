@@ -18,6 +18,8 @@ public interface IEventRepository
     Task<List<CuratedImageEntity>>       ListCuratedAsync(CancellationToken ct = default);
     Task<CuratedImageEntity>             CreateCuratedAsync(CuratedImageEntity entity, CancellationToken ct = default);
     Task                                 DeleteCuratedAsync(string imageId, CancellationToken ct = default);
+    Task<EventEntity>                    DuplicateEventAsync(string eventId, string newUserId, CancellationToken ct = default);
+    Task<RsvpEntity?>                    CheckinRsvpAsync(string eventId, string rsvpId, CancellationToken ct = default);
     Task<ReminderLog>                    SaveReminderLogAsync(ReminderLog log, CancellationToken ct = default);
     Task<List<ReminderLog>>              ListReminderLogsAsync(string eventId, CancellationToken ct = default);
 }

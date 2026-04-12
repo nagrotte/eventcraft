@@ -42,3 +42,20 @@ keyssecrets.txt
 
 apps/api/EventCraft.Events/publish/
 deploy/
+
+# Utility patch scripts
+patch_*.py
+fix_*.py
+run_all_patches.py
+write_*.py
+scan_*.py
+update_*.py
+get_cognito_user.py
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!next.config.*
+!aws-lambda-tools-defaults.json
+.vercel
+.env*.local
