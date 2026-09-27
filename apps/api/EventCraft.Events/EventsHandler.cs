@@ -459,7 +459,7 @@ public class EventsHandler
         return OkResponse(ApiResponse<object>.Ok(new { success = true }));
     }
 
-    // ── Email template ────────────────────────────────────────────────────────
+    // ΓöÇΓöÇ Email template ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
     // Personal invitation. Text-only wordmark (SVG stripped by Gmail/Outlook).
     // Description included. eventcraft credit is subtle footer only.
 
@@ -472,6 +472,9 @@ public class EventsHandler
         var repo    = _services.GetRequiredService<IEventRepository>();
         var ev      = await repo.GetByIdAsync(eventId);
         if (ev is null || ev.UserId != userId) return NotFoundResponse();
+
+        if (DateTime.TryParse(ev.EventDate, out var evDate) && evDate.ToUniversalTime() < DateTime.UtcNow.AddHours(-12))
+            return ErrorResponse(400, "EVENT_ENDED", "Reminders cannot be sent after the event has ended.");
 
         var body     = Deserialize<SendReminderRequest>(req.Body);
         var audience = body?.Audience ?? "yes";
@@ -743,7 +746,7 @@ public class EventsHandler
             {
                 var time = item.TryGetProperty("time", out var t) ? t.GetString() ?? "" : "";
                 var desc = item.TryGetProperty("description", out var d) ? d.GetString() ?? "" : "";
-                return string.IsNullOrEmpty(time) ? desc : $"{time} — {desc}";
+                return string.IsNullOrEmpty(time) ? desc : $"{time} ΓÇö {desc}";
             });
             return string.Join("\n", lines);
         }
