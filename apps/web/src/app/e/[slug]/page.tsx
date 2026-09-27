@@ -321,12 +321,82 @@ export default function MicrositePage() {
           )}
 
           {step === 'done' && (
-            <div style={{ textAlign: 'center', padding: '16px 0' }}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>{response === 'yes' ? '🎉' : response === 'no' ? '😔' : '🤔'}</div>
-              <p style={{ fontSize: 18, fontWeight: 700, color: '#fff', marginBottom: 6 }}>
-                {response === 'yes' ? 'See you there!' : response === 'no' ? "Sorry you can't make it" : "We'll keep a spot for you"}
-              </p>
-              <p style={{ fontSize: 13, color: '#888' }}>Your RSVP has been recorded.</p>
+            <div style={{ padding: '8px 0' }}>
+              <div style={{ textAlign: 'center', marginBottom: 20 }}>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>{response === 'yes' ? '🎉' : response === 'no' ? '😔' : '🤔'}</div>
+                <p style={{ fontSize: 18, fontWeight: 700, color: '#fff', marginBottom: 6 }}>
+                  {response === 'yes' ? 'See you there!' : response === 'no' ? "Sorry you can't make it" : "We'll keep a spot for you"}
+                </p>
+                <p style={{ fontSize: 13, color: '#888', marginBottom: 4 }}>Your RSVP has been recorded.</p>
+                <p style={{ fontSize: 12, color: '#555' }}>A confirmation email has been sent to {email}.</p>
+              </div>
+
+              {/* Calendar actions — only shown when attending */}
+              {response === 'yes' && event && (
+                <div style={{ marginBottom: 16 }}>
+                  <p style={{ fontSize: 11, color: '#555', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10, fontFamily: 'Helvetica Neue, sans-serif', textAlign: 'center' }}>Add to calendar</p>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <a
+                      href={(() => {
+                        const start = new Date(event.eventDate).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+                        const end   = new Date(new Date(event.eventDate).getTime() + 2 * 60 * 60 * 1000).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+                        const params = new URLSearchParams({
+                          action: 'TEMPLATE',
+                          text: event.title,
+                          dates: `${start}/${end}`,
+                          details: event.description ?? '',
+                          location: event.location ?? '',
+                        });
+                        return `https://calendar.google.com/calendar/render?${params.toString()}`;
+                      })()}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ flex: 1, padding: '10px 0', background: 'rgba(66,133,244,0.1)', border: '1px solid rgba(66,133,244,0.3)', borderRadius: 8, color: '#4285F4', fontSize: 12, fontWeight: 600, textDecoration: 'none', textAlign: 'center', fontFamily: 'Helvetica Neue, sans-serif', display: 'block' }}
+                    >
+                      Google Calendar
+                    </a>
+                    <button
+                      onClick={() => {
+                        const start = new Date(event.eventDate).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+                        const end   = new Date(new Date(event.eventDate).getTime() + 2 * 60 * 60 * 1000).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+                        const ics = [
+                          'BEGIN:VCALENDAR',
+                          'VERSION:2.0',
+                          'PRODID:-//EventCraft//EN',
+                          'BEGIN:VEVENT',
+                          `DTSTART:${start}`,
+                          `DTEND:${end}`,
+                          `SUMMARY:${event.title}`,
+                          event.location ? `LOCATION:${event.location}` : '',
+                          event.description ? `DESCRIPTION:${event.description.replace(/\n/g, '\\n')}` : '',
+                          `URL:${appUrl}/e/${slug}`,
+                          `UID:${event.eventId}@eventcraft`,
+                          'END:VEVENT',
+                          'END:VCALENDAR',
+                        ].filter(Boolean).join('\r\n');
+                        const blob = new Blob([ics], { type: 'text/calendar' });
+                        const url  = URL.createObjectURL(blob);
+                        const a    = document.createElement('a');
+                        a.href     = url;
+                        a.download = `${event.title.replace(/[^a-z0-9]/gi, '_')}.ics`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                      style={{ flex: 1, padding: '10px 0', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#aaa', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'Helvetica Neue, sans-serif' }}
+                    >
+                      Download .ics
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Change RSVP */}
+              <button
+                onClick={() => { setFormError(''); setStep('form'); }}
+                style={{ width: '100%', padding: '11px 0', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: '#666', fontSize: 13, cursor: 'pointer', fontFamily: 'Georgia, serif' }}
+              >
+                Change my RSVP
+              </button>
             </div>
           )}
         </div>
